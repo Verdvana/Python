@@ -36,8 +36,10 @@ if __name__ == "__main__":
         sys.exit(1)
 
     file_path = sys.argv[1]
+    print(file_path)
     try:
         pt = read_with_pandas(file_path)
+    
         print("Signal Driving Cell:", pt["signal_driving_cell"])
         print("Clock Driving Cell:", pt["clock_driving_cell"])
         print("Signal Transition Min:", pt["signal_transition_min"])
