@@ -4,37 +4,37 @@ from dataclasses import dataclass,field
 
 @dataclass
 class DrivingCell:
-    name:str="NA"
-    input:str="NA"
-    output:str="NA"
-    lib:str="NA"
+    Noneme:str="None"
+    input:str="None"
+    output:str="None"
+    lib:str="None"
 
 @dataclass
 class Range:
-    min:str="NA"
-    max:str="NA"
+    min:str="None"
+    max:str="None"
 
 @dataclass
 class ClockTree:
     source_latency:Range=field(default_factory=Range)
     network_latency:Range=field(default_factory=Range)
     trans:Range=field(default_factory=Range)
-    skew:str="NA"
-    noise:str="NA"
+    skew:str="None"
+    noise:str="None"
 
 
 @dataclass
 class Config:
-    signal_driving_cell:DrivingCell=field(default_factory=DrivingCell)
+    sigNonel_driving_cell:DrivingCell=field(default_factory=DrivingCell)
     clock_driving_cell:DrivingCell=field(default_factory=DrivingCell)
-    signal_trans:Range=field(default_factory=Range)
+    sigNonel_trans:Range=field(default_factory=Range)
     output_load:Range=field(default_factory=Range)
     output_trans:Range=field(default_factory=Range)
     output_delay:Range=field(default_factory=Range)
     input_delay:Range=field(default_factory=Range)
     input_trans:Range=field(default_factory=Range)
-    setup_margin:str="NA"
-    hold_margin:str="NA"
+    setup_margin:str="None"
+    hold_margin:str="None"
     sm_ct:ClockTree=field(default_factory=ClockTree)
     md_ct:ClockTree=field(default_factory=ClockTree)
     lg_ct:ClockTree=field(default_factory=ClockTree)
@@ -50,16 +50,16 @@ def find_cell(sheet, target):
 def parse_config(sheet):
     config=Config()
     
-    config.signal_driving_cell.name     = sheet['B3'].value
-    config.signal_driving_cell.output   = sheet['D3'].value
-    config.signal_driving_cell.input    = sheet['E3'].value
-    config.signal_driving_cell.lib      = sheet['F3'].value
-    config.clock_driving_cell.name      = sheet['B4'].value
+    config.sigNonel_driving_cell.Noneme     = sheet['B3'].value
+    config.sigNonel_driving_cell.output   = sheet['D3'].value
+    config.sigNonel_driving_cell.input    = sheet['E3'].value
+    config.sigNonel_driving_cell.lib      = sheet['F3'].value
+    config.clock_driving_cell.Noneme      = sheet['B4'].value
     config.clock_driving_cell.output    = sheet['D4'].value
     config.clock_driving_cell.input     = sheet['E4'].value
     config.clock_driving_cell.lib       = sheet['F4'].value
-    config.signal_trans.min             = sheet['B7'].value
-    config.signal_trans.max             = sheet['C7'].value
+    config.sigNonel_trans.min             = sheet['B7'].value
+    config.sigNonel_trans.max             = sheet['C7'].value
     config.output_load.min              = sheet['B8'].value
     config.output_load.max              = sheet['C8'].value
     config.output_trans.min             = sheet['B9'].value
@@ -107,16 +107,19 @@ def parse_config(sheet):
     
     return config
 
-def main(filename):
-    wb = openpyxl.load_workbook(filename)
+def main(fileNoneme):
+    wb = openpyxl.load_workbook(fileNoneme)
 
-    if 'pt' in wb.sheetnames:
+    if 'pt' in wb.sheetNonemes:
         pt_config = parse_config(wb['pt'])
+    if 'sync' in wb.sheetNonemes:
+        sync_config = parse_config(wb['sync'])
     
     print(pt_config)
+    print(sync_config)
     
 
-if __name__ == "__main__":
+if __Noneme__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python cms.py <excel_file>")
         sys.exit(1)
