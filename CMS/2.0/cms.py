@@ -4,7 +4,7 @@ from dataclasses import dataclass,field
 
 @dataclass
 class DrivingCell:
-    Noneme:str="None"
+    name:str="None"
     input:str="None"
     output:str="None"
     lib:str="None"
@@ -25,9 +25,9 @@ class ClockTree:
 
 @dataclass
 class Config:
-    sigNonel_driving_cell:DrivingCell=field(default_factory=DrivingCell)
+    signal_driving_cell:DrivingCell=field(default_factory=DrivingCell)
     clock_driving_cell:DrivingCell=field(default_factory=DrivingCell)
-    sigNonel_trans:Range=field(default_factory=Range)
+    signal_trans:Range=field(default_factory=Range)
     output_load:Range=field(default_factory=Range)
     output_trans:Range=field(default_factory=Range)
     output_delay:Range=field(default_factory=Range)
@@ -50,16 +50,16 @@ def find_cell(sheet, target):
 def parse_config(sheet):
     config=Config()
     
-    config.sigNonel_driving_cell.Noneme     = sheet['B3'].value
-    config.sigNonel_driving_cell.output   = sheet['D3'].value
-    config.sigNonel_driving_cell.input    = sheet['E3'].value
-    config.sigNonel_driving_cell.lib      = sheet['F3'].value
-    config.clock_driving_cell.Noneme      = sheet['B4'].value
+    config.signal_driving_cell.name     = sheet['B3'].value
+    config.signal_driving_cell.output   = sheet['D3'].value
+    config.signal_driving_cell.input    = sheet['E3'].value
+    config.signal_driving_cell.lib      = sheet['F3'].value
+    config.clock_driving_cell.name      = sheet['B4'].value
     config.clock_driving_cell.output    = sheet['D4'].value
     config.clock_driving_cell.input     = sheet['E4'].value
     config.clock_driving_cell.lib       = sheet['F4'].value
-    config.sigNonel_trans.min             = sheet['B7'].value
-    config.sigNonel_trans.max             = sheet['C7'].value
+    config.signal_trans.min             = sheet['B7'].value
+    config.signal_trans.max             = sheet['C7'].value
     config.output_load.min              = sheet['B8'].value
     config.output_load.max              = sheet['C8'].value
     config.output_trans.min             = sheet['B9'].value
@@ -107,19 +107,19 @@ def parse_config(sheet):
     
     return config
 
-def main(fileNoneme):
-    wb = openpyxl.load_workbook(fileNoneme)
+def main(filename):
+    wb = openpyxl.load_workbook(filename)
 
-    if 'pt' in wb.sheetNonemes:
+    if 'pt' in wb.sheetnames:
         pt_config = parse_config(wb['pt'])
-    if 'sync' in wb.sheetNonemes:
+    if 'sync' in wb.sheetnames:
         sync_config = parse_config(wb['sync'])
     
     print(pt_config)
     print(sync_config)
     
 
-if __Noneme__ == "__main__":
+if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python cms.py <excel_file>")
         sys.exit(1)
