@@ -107,9 +107,43 @@ def parse_config(sheet):
     
     return config
 
+def parse_clock(sheet):
+    clock_list = []
+    row_index  = 4
+    while True:
+        if sheet.cell(row=row_index,column=1).value in (None, ""):
+            break
+
+        row_data = []
+        for col_index in range(1, sheet.max_column + 1):
+            cell_value = sheet.cell(row=row_index, column=col_index).value
+            row_data.append(cell_value)
+        
+        clock_list.append(row_data)
+        row_index += 1
+    return clock_list
+
+def gen_cms_cons_clk(clock_list):
+    if not clock_list:
+        print("No clock data found.")
+        return
+    
+    print(f"Starting to generate CMS clock constraints for {len(clock_list)} clocks.")
+    print("-"*20)
+
+    for i row in enumerate(clock_list,start=1):
+        if len(row) < 9:
+            print(f"Data for clock {i} is incomplete, skipping.")
+            continue
+    
+
+
 def main(filename):
     wb = openpyxl.load_workbook(filename)
 
+    if 'clock' in wb.sheetnames:
+        clock_list = parse_clock(wb['clock'])
+        gen_cms_cons_clk(clock_list)
     if 'pt' in wb.sheetnames:
         pt_config = parse_config(wb['pt'])
     if 'sync' in wb.sheetnames:
@@ -117,7 +151,10 @@ def main(filename):
     
     print(pt_config)
     print(sync_config)
+    print(clock_list)
+
     
+    wb.close()
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
