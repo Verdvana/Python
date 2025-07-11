@@ -3,6 +3,21 @@ import openpyxl
 from dataclasses import dataclass,field
 
 @dataclass
+class ClockAttr:
+    level:str="None"
+    group:str="None"
+    type:str="None"
+    period:str="None"
+    name:str="None"
+    master:str="None"
+    jsrc:float=0
+    jmn:float=0
+    jdc:float=0
+    root:str="None"
+    comment:str="None"
+
+
+@dataclass
 class DrivingCell:
     name:str="None"
     input:str="None"
@@ -130,28 +145,37 @@ def gen_cms_cons_clk(clock_list):
     
     print(f"Starting to generate CMS clock constraints for {len(clock_list)} clocks.")
     print("-"*20)
+    #print(clock_list)
 
-    for i row in enumerate(clock_list,start=1):
-        if len(row) < 9:
-            print(f"Data for clock {i} is incomplete, skipping.")
+    #for row in enumerate(clock_list,start=1):
+    for row in clock_list:
+        if not len(row) == 11:
+            print(f"Data for clock {row} is incomplete, skipping.")
             continue
-    
+        ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment=row
+        #print(ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment)
+        if "/" in ClockAttr.root:
+            pin_or_port = "pins"
+        else:
+            pin_or_port = "ports"
 
-
+        cons = f"create_clock -period {ClockAttr.period} [get_{pin_or_port} {ClockAttr.root}]"
+        print(cons)
 def main(filename):
     wb = openpyxl.load_workbook(filename)
 
     if 'clock' in wb.sheetnames:
         clock_list = parse_clock(wb['clock'])
+        #print (clock_list)
         gen_cms_cons_clk(clock_list)
     if 'pt' in wb.sheetnames:
         pt_config = parse_config(wb['pt'])
     if 'sync' in wb.sheetnames:
         sync_config = parse_config(wb['sync'])
     
-    print(pt_config)
-    print(sync_config)
-    print(clock_list)
+    #print(pt_config)
+    #print(sync_config)
+    #print(clock_list)
 
     
     wb.close()
