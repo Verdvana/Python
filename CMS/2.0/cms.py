@@ -139,6 +139,7 @@ def parse_clock(sheet):
     return clock_list
 
 def gen_cms_cons_clk(clock_list):
+    cons = ""
     if not clock_list:
         print("No clock data found.")
         return
@@ -159,15 +160,25 @@ def gen_cms_cons_clk(clock_list):
         else:
             pin_or_port = "ports"
 
-        cons = f"create_clock -period {ClockAttr.period} [get_{pin_or_port} {ClockAttr.root}]"
-        print(cons)
+        cons += f"\ncreate_clock -period {ClockAttr.period} [get_{pin_or_port} {ClockAttr.root}]"
+        cons += f"\nset_ideal_network [get_{pin_or_port} {ClockAttr.root}]"
+        cons += f"\nset_dont_touch_network [get_{pin_or_port} {ClockAttr.root}]"
+        cons += f"\nset_drive [get_{pin_or_port} {ClockAttr.root}]"
+        cons += f"\nset_clock_uncertaity  -setup $CLK_SKEW [get_{pin_or_port} {ClockAttr.root}]"
+        cons += f"\nset_clock_transition  -max $CLK_TRAN [get_{pin_or_port} {ClockAttr.root}]"
+        cons += f"\nset_clock_latency -source -max $CLK_SRC_LATENCY [get_{pin_or_port} {ClockAttr.root}]"
+        cons += f"\nset_clock_latency -max $CLK_LATENCY [get_{pin_or_port} {ClockAttr.root}]"
+    
+    return cons
+
 def main(filename):
+    cons = ""
     wb = openpyxl.load_workbook(filename)
 
     if 'clock' in wb.sheetnames:
         clock_list = parse_clock(wb['clock'])
         #print (clock_list)
-        gen_cms_cons_clk(clock_list)
+        cons_clk = gen_cms_cons_clk(clock_list)
     if 'pt' in wb.sheetnames:
         pt_config = parse_config(wb['pt'])
     if 'sync' in wb.sheetnames:
@@ -176,6 +187,10 @@ def main(filename):
     #print(pt_config)
     #print(sync_config)
     #print(clock_list)
+    
+    
+    cons += cons_clk
+    print (cons)
 
     
     wb.close()
