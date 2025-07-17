@@ -1,4 +1,5 @@
 import sys
+import re
 import openpyxl
 from dataclasses import dataclass,field
 
@@ -155,19 +156,37 @@ def gen_cms_cons_clk(clock_list):
             continue
         ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment=row
         #print(ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment)
-        if "/" in ClockAttr.root:
-            pin_or_port = "pins"
+        
+        print (ClockAttr.master,ClockAttr.root)
+        if ClockAttr.root is None:
+            cons += f"\ncreate_clock -name {ClockAttr.name} -period {ClockAttr.period}"
         else:
-            pin_or_port = "ports"
-
-        cons += f"\ncreate_clock -period {ClockAttr.period} [get_{pin_or_port} {ClockAttr.root}]"
-        cons += f"\nset_ideal_network [get_{pin_or_port} {ClockAttr.root}]"
-        cons += f"\nset_dont_touch_network [get_{pin_or_port} {ClockAttr.root}]"
-        cons += f"\nset_drive [get_{pin_or_port} {ClockAttr.root}]"
-        cons += f"\nset_clock_uncertaity  -setup $CLK_SKEW [get_{pin_or_port} {ClockAttr.root}]"
-        cons += f"\nset_clock_transition  -max $CLK_TRAN [get_{pin_or_port} {ClockAttr.root}]"
-        cons += f"\nset_clock_latency -source -max $CLK_SRC_LATENCY [get_{pin_or_port} {ClockAttr.root}]"
-        cons += f"\nset_clock_latency -max $CLK_LATENCY [get_{pin_or_port} {ClockAttr.root}]"
+            if "/" in ClockAttr.root:
+                pin_or_port = "pins"
+            else:
+                pin_or_port = "ports"
+            
+            if ClockAttr.master is None:
+                cons += f"\ncreate_clock -name {ClockAttr.name} -period {ClockAttr.period} [get_{pin_or_port} {ClockAttr.root}]"
+                cons += f"\nset_ideal_network [get_{pin_or_port} {ClockAttr.root}]"
+                cons += f"\nset_dont_touch_network [get_{pin_or_port} {ClockAttr.root}]"
+                cons += f"\nset_drive [get_{pin_or_port} {ClockAttr.root}]"
+                cons += f"\nset_clock_uncertaity  -setup $CLK_SKEW [get_{pin_or_port} {ClockAttr.root}]"
+                cons += f"\nset_clock_transition  -max $CLK_TRAN [get_{pin_or_port} {ClockAttr.root}]"
+                cons += f"\nset_clock_latency -source -max $CLK_SRC_LATENCY [get_{pin_or_port} {ClockAttr.root}]"
+                cons += f"\nset_clock_latency -max $CLK_LATENCY [get_{pin_or_port} {ClockAttr.root}]"
+            else:
+                mst_source = next((item[9] for item in clock_list if item[4] == ClockAttr.master),None)
+                if not "/" in mst_source:
+                    mst_source = f"[get_port {mst_source}]"
+                if match := re.match(r"-div\s+(\d+)$",ClockAttr.period):
+                    ClockAttr.period = f"-divide_by {match.group(1)}"
+                elif match := re.match(r"-multi\s+(\d+)$",ClockAttr.period):
+                    ClockAttr.period = f"-multiply_by {match.group(1)}"
+                elif match := re.match(r"-edges\s+\{\s*\d+\s+\d+\s+\d+\s*\}$",ClockAttr.period):
+                    ClockAttr.period = f"{ClockAttr.period}"
+                    
+                cons += f"\ncreate_generated_clock -name {ClockAttr.name} {ClockAttr.period} -source {mst_source} [get_{pin_or_port} {ClockAttr.root}]" 
     
     return cons
 
@@ -188,7 +207,7 @@ def main(filename):
     #print(sync_config)
     #print(clock_list)
     
-    
+
     cons += cons_clk
     print (cons)
 
