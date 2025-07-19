@@ -140,7 +140,7 @@ def parse_clock(sheet):
     return clock_list
 
 def gen_cms_cons_clk(clock_list):
-    cons = ""
+    cons = "\n#========================================\n#Clock Constraint"
     if not clock_list:
         print("No clock data found.")
         return
