@@ -138,7 +138,22 @@ def parse_clock(sheet):
         clock_list.append(row_data)
         row_index += 1
     return clock_list
+def parse_io(sheet):
+    io_list = []
+    row_index  = 4
+    while True:
+        if sheet.cell(row=row_index,column=1).value in (None, ""):
+            print("xxxyyy")
+            break
 
+        row_data = []
+        for col_index in range(1, sheet.max_column + 1):
+            cell_value = sheet.cell(row=row_index, column=col_index).value
+            row_data.append(cell_value)
+        
+        io_list.append(row_data)
+        row_index += 1
+    return io_list
 def gen_cms_cons_clk(clock_list):
     cons = "\n#========================================\n#Clock Constraint"
     if not clock_list:
@@ -157,7 +172,7 @@ def gen_cms_cons_clk(clock_list):
         ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment=row
         #print(ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment)
         
-        print (ClockAttr.master,ClockAttr.root)
+        #print (ClockAttr.master,ClockAttr.root)
         if ClockAttr.root is None:
             cons += f"\ncreate_clock -name {ClockAttr.name} -period {ClockAttr.period}"
         else:
@@ -202,14 +217,17 @@ def main(filename):
         pt_config = parse_config(wb['pt'])
     if 'sync' in wb.sheetnames:
         sync_config = parse_config(wb['sync'])
-    
+    if 'io' in wb.sheetnames:
+        io_list = parse_io(wb['io'])
+        print (io_list)
+        #cons_io = gen_cms_cons_io(io_list)
     #print(pt_config)
     #print(sync_config)
     #print(clock_list)
     
 
     cons += cons_clk
-    print (cons)
+    #print (cons)
 
     
     wb.close()
