@@ -143,7 +143,6 @@ def parse_io(sheet):
     row_index  = 4
     while True:
         if sheet.cell(row=row_index,column=1).value in (None, ""):
-            print("xxxyyy")
             break
 
         row_data = []
@@ -205,6 +204,23 @@ def gen_cms_cons_clk(clock_list):
     
     return cons
 
+def gen_cms_cons_io(io_list):
+    cons = "\n#========================================\n#IO Constraint"
+    if not io_list:
+        print("No io data found.")
+        return
+    
+    print(f"Starting to generate CMS io constraints for {len(io_list)} ports.")
+    print("-"*20)
+    #print(io_list)
+
+    #for row in enumerate(clock_list,start=1):
+    for row in io_list:
+        if not len(row) == 11:
+            print(f"Data for clock {row} is incomplete, skipping.")
+            continue
+        ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment=row
+    return cons
 def main(filename):
     cons = ""
     wb = openpyxl.load_workbook(filename)
