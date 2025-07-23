@@ -166,7 +166,6 @@ def gen_cms_cons_clk(clock_dict):
             else:
                 #mst_clk = 
                 mst_source = clock_dict[clock_dict[name]['master']]['root']
-                print (mst_source)
                 if not "/" in mst_source:
                     mst_source = f"[get_port {mst_source}]"
                 if match := re.match(r"-div\s+(\d+)$",clock_dict[name]['period']):
@@ -195,10 +194,26 @@ def gen_cms_cons_io(io_dict,clock_dict):
 
     #for row in enumerate(clock_list,start=1):
     for pin,row_data in io_dict.items():
-        if io_dict[pin]['direction'] == "input":
-            if not io_dict[pin]['delay_min'] is None:
+        if io_dict[pin]['direction'] in ("input","in"):
+            if io_dict[pin]['delay_min'] is not None:
                 delay = clock_dict[io_dict[pin]['clock']]['period'] * io_dict[pin]['delay_min']
-                cons += f"\nset_input_delay -clock {io_dict[pin]['delay_min']} -min {delay}"
+                cons += f"\nset_input_delay -clock {io_dict[pin]['clock']} -min {delay} [get_ports {pin}]"
+            if io_dict[pin]['delay_max'] is not None:
+                delay = clock_dict[io_dict[pin]['clock']]['period'] * io_dict[pin]['delay_max']
+                cons += f"\nset_input_delay -clock {io_dict[pin]['clock']} -max {delay} [get_ports {pin}]"
+        elif io_dict[pin]['direction'] in ("output","out"):
+            if io_dict[pin]['delay_min'] is not None:
+                delay = clock_dict[io_dict[pin]['clock']]['period'] * io_dict[pin]['delay_min']
+                cons += f"\nset_output_delay -clock {io_dict[pin]['clock']} -min {delay} [get_ports {pin}]"
+            if io_dict[pin]['delay_max'] is not None:
+                delay = clock_dict[io_dict[pin]['clock']]['period'] * io_dict[pin]['delay_max']
+                cons += f"\nset_output_delay -clock {io_dict[pin]['clock']} -max {delay} [get_ports {pin}]"
+            if io_dict[pin]['load_min'] is not None:
+                load = io_dict[pin]['load_min']
+                cons += f"\nset_load -min {load} [get_ports {pin}]"
+            if io_dict[pin]['load_max'] is not None:
+                load = io_dict[pin]['load_max']
+                cons += f"\nset_load -max {load} [get_ports {pin}]"
     return cons
 
 def main(filename):
