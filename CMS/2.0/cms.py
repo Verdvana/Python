@@ -3,20 +3,12 @@ import re
 import openpyxl
 from dataclasses import dataclass,field
 
-@dataclass
-class ClockAttr:
-    level:str="None"
-    group:str="None"
-    type:str="None"
-    period:str="None"
-    name:str="None"
-    master:str="None"
-    jsrc:float=0
-    jmn:float=0
-    jdc:float=0
-    root:str="None"
-    comment:str="None"
 
+
+@dataclass
+class Range:
+    min:str="None"
+    max:str="None"
 
 @dataclass
 class DrivingCell:
@@ -26,18 +18,12 @@ class DrivingCell:
     lib:str="None"
 
 @dataclass
-class Range:
-    min:str="None"
-    max:str="None"
-
-@dataclass
 class ClockTree:
     source_latency:Range=field(default_factory=Range)
     network_latency:Range=field(default_factory=Range)
     trans:Range=field(default_factory=Range)
     skew:str="None"
     noise:str="None"
-
 
 @dataclass
 class Config:
@@ -55,13 +41,6 @@ class Config:
     md_ct:ClockTree=field(default_factory=ClockTree)
     lg_ct:ClockTree=field(default_factory=ClockTree)
     raw_ct:ClockTree=field(default_factory=ClockTree)
-
-def find_cell(sheet, target):
-    for row in sheet.iter_rows():
-        for cell in row:
-            if cell.value == target:
-                return cell
-    return None
 
 def parse_config(sheet):
     config=Config()
@@ -124,126 +103,128 @@ def parse_config(sheet):
     return config
 
 def parse_clock(sheet):
-    clock_list = []
-    row_index  = 4
+    clock_dict  = {}
+    row_index   = 4
+    columns     = ['level','group','type','period','name','master','jsrc','jmn','jdc','root','comment']
     while True:
-        if sheet.cell(row=row_index,column=1).value in (None, ""):
+        row = [cell.value for cell in sheet[row_index]]
+        if row[0] is None:
             break
-
-        row_data = []
-        for col_index in range(1, sheet.max_column + 1):
-            cell_value = sheet.cell(row=row_index, column=col_index).value
-            row_data.append(cell_value)
-        
-        clock_list.append(row_data)
+        row_data = dict(zip(columns,row[:11]))
+        name = row_data['name']
+        if name:
+            clock_dict[name] = row_data
         row_index += 1
-    return clock_list
+    return clock_dict
+
 def parse_io(sheet):
-    io_list = []
-    row_index  = 4
+    io_dict     = {}
+    row_index   = 4
+    columns     = ['level','pin','direction','clock','trans_min','trans_max','delay_min','delay_max','delay_cmd','load_min','load_max']
     while True:
-        if sheet.cell(row=row_index,column=1).value in (None, ""):
+        row = [cell.value for cell in sheet[row_index]]
+        if row[0] is None:
             break
-
-        row_data = []
-        for col_index in range(1, sheet.max_column + 1):
-            cell_value = sheet.cell(row=row_index, column=col_index).value
-            row_data.append(cell_value)
-        
-        io_list.append(row_data)
+        row_data = dict(zip(columns,row[:11]))
+        pin = row_data['pin']
+        print(pin)
+        if pin:
+            io_dict[pin] = row_data
         row_index += 1
-    return io_list
-def gen_cms_cons_clk(clock_list):
+    return io_dict
+
+def gen_cms_cons_clk(clock_dict):
     cons = "\n#========================================\n#Clock Constraint"
-    if not clock_list:
+    if not clock_dict:
         print("No clock data found.")
         return
     
-    print(f"Starting to generate CMS clock constraints for {len(clock_list)} clocks.")
+    print(f"Starting to generate CMS clock constraints for {len(clock_dict)} clocks.")
     print("-"*20)
     #print(clock_list)
 
     #for row in enumerate(clock_list,start=1):
-    for row in clock_list:
-        if not len(row) == 11:
-            print(f"Data for clock {row} is incomplete, skipping.")
-            continue
-        ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment=row
-        #print(ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment)
+    for name,row_data in clock_dict.items():
         
-        #print (ClockAttr.master,ClockAttr.root)
-        if ClockAttr.root is None:
-            cons += f"\ncreate_clock -name {ClockAttr.name} -period {ClockAttr.period}"
+        if clock_dict[name]['root'] is None:
+            cons += f"\ncreate_clock -name {name} -period {clock_dict[name]['period']}"
         else:
-            if "/" in ClockAttr.root:
+            if "/" in clock_dict[name]['root']:
                 pin_or_port = "pins"
             else:
                 pin_or_port = "ports"
             
-            if ClockAttr.master is None:
-                cons += f"\ncreate_clock -name {ClockAttr.name} -period {ClockAttr.period} [get_{pin_or_port} {ClockAttr.root}]"
-                cons += f"\nset_ideal_network [get_{pin_or_port} {ClockAttr.root}]"
-                cons += f"\nset_dont_touch_network [get_{pin_or_port} {ClockAttr.root}]"
-                cons += f"\nset_drive [get_{pin_or_port} {ClockAttr.root}]"
-                cons += f"\nset_clock_uncertaity  -setup $CLK_SKEW [get_{pin_or_port} {ClockAttr.root}]"
-                cons += f"\nset_clock_transition  -max $CLK_TRAN [get_{pin_or_port} {ClockAttr.root}]"
-                cons += f"\nset_clock_latency -source -max $CLK_SRC_LATENCY [get_{pin_or_port} {ClockAttr.root}]"
-                cons += f"\nset_clock_latency -max $CLK_LATENCY [get_{pin_or_port} {ClockAttr.root}]"
+            if clock_dict[name]['master'] is None:
+                cons += f"\ncreate_clock -name {name} -period {clock_dict[name]['period']} [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_ideal_network [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_dont_touch_network [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_drive [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_uncertaity  -setup $CLK_SKEW [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_transition  -max $CLK_TRAN [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_latency -source -max $CLK_SRC_LATENCY [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_latency -max $CLK_LATENCY [get_{pin_or_port} {clock_dict[name]['root']}]"
             else:
-                mst_source = next((item[9] for item in clock_list if item[4] == ClockAttr.master),None)
+                #mst_clk = 
+                mst_source = clock_dict[clock_dict[name]['master']]['root']
+                print (mst_source)
                 if not "/" in mst_source:
                     mst_source = f"[get_port {mst_source}]"
-                if match := re.match(r"-div\s+(\d+)$",ClockAttr.period):
-                    ClockAttr.period = f"-divide_by {match.group(1)}"
-                elif match := re.match(r"-multi\s+(\d+)$",ClockAttr.period):
-                    ClockAttr.period = f"-multiply_by {match.group(1)}"
-                elif match := re.match(r"-edges\s+\{\s*\d+\s+\d+\s+\d+\s*\}$",ClockAttr.period):
-                    ClockAttr.period = f"{ClockAttr.period}"
-                    
-                cons += f"\ncreate_generated_clock -name {ClockAttr.name} {ClockAttr.period} -source {mst_source} [get_{pin_or_port} {ClockAttr.root}]" 
+                if match := re.match(r"-div\s+(\d+)$",clock_dict[name]['period']):
+                    generated_period = f"-divide_by {match.group(1)}"
+                elif match := re.match(r"-multi\s+(\d+)$",clock_dict[name]['period']):
+                    generated_period = f"-multiply_by {match.group(1)}"
+                elif match := re.match(r"-edges\s+\{\s*\d+\s+\d+\s+\d+\s*\}$",clock_dict[name]['period']):
+                    generated_period = clock_dict[name]['period']
+                else:
+                    generated_period = clock_dict[name]['period']
+                cons += f"\ncreate_generated_clock -name {name} {generated_period} -source {mst_source} [get_{pin_or_port} {clock_dict[name]['root']}]" 
     
     return cons
 
-def gen_cms_cons_io(io_list):
+
+def gen_cms_cons_io(io_dict,clock_dict):
+    print(io_dict)
     cons = "\n#========================================\n#IO Constraint"
-    if not io_list:
-        print("No io data found.")
+    if not io_dict:
+        print("No IO data found.")
         return
     
-    print(f"Starting to generate CMS io constraints for {len(io_list)} ports.")
+    print(f"Starting to generate CMS IO constraints for {len(io_dict)} pins.")
     print("-"*20)
-    #print(io_list)
+    #print(clock_list)
 
     #for row in enumerate(clock_list,start=1):
-    for row in io_list:
-        if not len(row) == 11:
-            print(f"Data for clock {row} is incomplete, skipping.")
-            continue
-        ClockAttr.level,ClockAttr.group,ClockAttr.type,ClockAttr.period,ClockAttr.name,ClockAttr.master,ClockAttr.jsrc,ClockAttr.jmn,ClockAttr.jdc,ClockAttr.root,ClockAttr.comment=row
+    for pin,row_data in io_dict.items():
+        if io_dict[pin]['direction'] == "input":
+            if not io_dict[pin]['delay_min'] is None:
+                delay = clock_dict[io_dict[pin]['clock']]['period'] * io_dict[pin]['delay_min']
+                cons += f"\nset_input_delay -clock {io_dict[pin]['delay_min']} -min {delay}"
     return cons
+
 def main(filename):
     cons = ""
     wb = openpyxl.load_workbook(filename)
 
     if 'clock' in wb.sheetnames:
-        clock_list = parse_clock(wb['clock'])
+        clock_dict = parse_clock(wb['clock'])
         #print (clock_list)
-        cons_clk = gen_cms_cons_clk(clock_list)
+        cons_clk = gen_cms_cons_clk(clock_dict)
     if 'pt' in wb.sheetnames:
         pt_config = parse_config(wb['pt'])
     if 'sync' in wb.sheetnames:
         sync_config = parse_config(wb['sync'])
     if 'io' in wb.sheetnames:
-        io_list = parse_io(wb['io'])
-        print (io_list)
-        #cons_io = gen_cms_cons_io(io_list)
+        io_dict = parse_io(wb['io'])
+        #print (io_list)
+        cons_io = gen_cms_cons_io(io_dict,clock_dict)
     #print(pt_config)
     #print(sync_config)
     #print(clock_list)
     
 
     cons += cons_clk
-    #print (cons)
+    cons += cons_io
+    print (cons)
 
     
     wb.close()
