@@ -55,19 +55,30 @@ def error_exit(msg):
     sys.exit(1)
 
 def parse_design(sheet):
-    Design.top = sheet['B1'].value
-    raw_path = sheet['B2'].value
-    if raw_path.startswith("$"):
-        var_path = raw_path[1:]
-        path = os.environ.get(var_path)
-        if path is None:
-            print(f"Error: Not define $'{var_path}'")
-            sys.exit(1)
+    Design.top = sheet['B2'].value
+    if Design.top is None:
+        error_exit("未定义顶层模块名称")
+    if Design.top in os.environ:
+        print(f"Capture the environment variable {Design.top} as the top module name.")
     else:
-        path = raw_path
-    Design.path = path
-    rtl_dir = os.path.join(path,"design","rtl")
-    all_file = glob.glob(os.path.join(rtl_dir,"*.v")) + glob.glob(os.path.join(rtl_dir,"*.sv"))
+        raw_path = sheet['B1'].value
+        if raw_path is None:
+            error_exit("Error: Not define design path")
+        os.environ[Design.top] = str(raw_path)
+        print(f"Set the environment variable {Design.top} as the top module name.")
+    
+    Design.rtl_path = sheet['B3'].value
+    rtl_pattern = ["*.v", "*.sv", "*.vhd", "*.vhdl"]
+    Design.rtl_list = []
+    for pattern in rtl_pattern:
+        Design.rtl_list.extend(glob.glob(os.path.join(Design.rtl_path, pattern)))
+    if not Design.rtl_list:
+        error_exit(f"Error: Not find RTL files in {Design.rtl_path} with pattern {rtl_pattern}")
+    Design.rtl_list = " ".join(os.path.basename(f) for f in Design.rtl_list)
+    print(f"RTL files found: {Design.rtl_list}")
+
+
+
 
 def parse_config(sheet):
     config=Config()
@@ -281,6 +292,8 @@ def main(filename):
     cons = ""
     wb = openpyxl.load_workbook(filename)
 
+    if 'design' in wb.sheetnames:
+        design_set = parse_design(wb['design'])
     if 'pt' in wb.sheetnames:
         pt_config = parse_config(wb['pt'])
         cons_pt = gen_cms_cons_pt(pt_config)
