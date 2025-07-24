@@ -1,9 +1,19 @@
 import sys
 import re
+import os
 import openpyxl
 from dataclasses import dataclass,field
 
 
+@dataclass
+class Design:
+    path:str="None"
+    top:str="None"
+    rtl_path:str="None"
+    tb_path:str="None"
+    rtl_file:str="None"
+    param:str="None"
+    lib_list:str="None"
 
 @dataclass
 class Range:
@@ -41,6 +51,21 @@ class Config:
     md_ct:ClockTree=field(default_factory=ClockTree)
     lg_ct:ClockTree=field(default_factory=ClockTree)
     raw_ct:ClockTree=field(default_factory=ClockTree)
+
+def parse_design(sheet):
+    Design.top = sheet['B1'].value
+    raw_path = sheet['B2'].value
+    if raw_path.startswith("$"):
+        var_path = raw_path[1:]
+        path = os.environ.get(var_path)
+        if path is None:
+            print(f"Error: Not define $'{var_path}'")
+            sys.exit(1)
+    else:
+        path = raw_path
+    Design.path = path
+    rtl_dir = os.path.join(path,"design","rtl")
+    all_file = glob.glob(os.path.join(rtl_dir,"*.v")) + glob.glob(os.path.join(rtl_dir,"*.sv"))
 
 def parse_config(sheet):
     config=Config()
@@ -116,7 +141,20 @@ def parse_clock(sheet):
             clock_dict[name] = row_data
         row_index += 1
     return clock_dict
-
+def parse_rst(sheet):
+    rst_dict  = {}
+    row_index   = 3
+    columns     = ['level','reset','type','edge','clock']
+    while True:
+        row = [cell.value for cell in sheet[row_index]]
+        if row[0] is None:
+            break
+        row_data = dict(zip(columns,row[:5]))
+        reset = row_data['reset']
+        if reset:
+            rst_dict[reset] = row_data
+        row_index += 1
+    return rst_dict
 def parse_io(sheet):
     io_dict     = {}
     row_index   = 4
@@ -127,11 +165,21 @@ def parse_io(sheet):
             break
         row_data = dict(zip(columns,row[:11]))
         pin = row_data['pin']
-        print(pin)
         if pin:
             io_dict[pin] = row_data
         row_index += 1
     return io_dict
+
+def gen_cms_cons_pt(pt_config):
+    cons = ""
+
+def gen_cms_cons_synth(synth_config):
+    print (synth_config)
+    cons = "\n#========================================\n#Add LIB"
+    cons += f"\nread_db [list typical.db fast.db slow.db]"
+    #cons += f"\nset TOP_MODULE {design}"
+    #cons += f""
+
 
 def gen_cms_cons_clk(clock_dict):
     cons = "\n#========================================\n#Clock Constraint"
@@ -141,9 +189,7 @@ def gen_cms_cons_clk(clock_dict):
     
     print(f"Starting to generate CMS clock constraints for {len(clock_dict)} clocks.")
     print("-"*20)
-    #print(clock_list)
 
-    #for row in enumerate(clock_list,start=1):
     for name,row_data in clock_dict.items():
         
         if clock_dict[name]['root'] is None:
@@ -181,8 +227,23 @@ def gen_cms_cons_clk(clock_dict):
     return cons
 
 
+def gen_cms_cons_rst(rst_dict,clock_dict):
+    cons = "\n#========================================\n#Reset Constraint"
+    if not rst_dict:
+        print("No Reset data found.")
+        return
+    
+    print(f"Starting to generate CMS Reset constraints for {len(rst_dict)} reset.")
+    print("-"*20)
+    
+    for reset,row_data in rst_dict.items():
+        cons += f"\nset_ideal_network [get_port {reset}]"
+        cons += f"\nset_dont_touch_network [get_port {reset}]"
+        cons += f"\nset_drive 0 [get_port {reset}]"
+    
+    return cons
+
 def gen_cms_cons_io(io_dict,clock_dict):
-    print(io_dict)
     cons = "\n#========================================\n#IO Constraint"
     if not io_dict:
         print("No IO data found.")
@@ -190,8 +251,6 @@ def gen_cms_cons_io(io_dict,clock_dict):
     
     print(f"Starting to generate CMS IO constraints for {len(io_dict)} pins.")
     print("-"*20)
-    #print(clock_list)
-
     #for row in enumerate(clock_list,start=1):
     for pin,row_data in io_dict.items():
         if io_dict[pin]['direction'] in ("input","in"):
@@ -220,24 +279,31 @@ def main(filename):
     cons = ""
     wb = openpyxl.load_workbook(filename)
 
+    if 'pt' in wb.sheetnames:
+        pt_config = parse_config(wb['pt'])
+        cons_pt = gen_cms_cons_pt(pt_config)
+    if 'synth' in wb.sheetnames:
+        synth_config = parse_config(wb['synth'])
+        cons_synth = gen_cms_cons_synth(synth_config)
+
     if 'clock' in wb.sheetnames:
         clock_dict = parse_clock(wb['clock'])
         #print (clock_list)
         cons_clk = gen_cms_cons_clk(clock_dict)
-    if 'pt' in wb.sheetnames:
-        pt_config = parse_config(wb['pt'])
-    if 'sync' in wb.sheetnames:
-        sync_config = parse_config(wb['sync'])
+    if 'reset' in wb.sheetnames:
+        rst_dict = parse_rst(wb['reset'])
+        cons_rst = gen_cms_cons_rst(rst_dict,clock_dict)
     if 'io' in wb.sheetnames:
         io_dict = parse_io(wb['io'])
         #print (io_list)
         cons_io = gen_cms_cons_io(io_dict,clock_dict)
     #print(pt_config)
-    #print(sync_config)
+    #print(synth_config)
     #print(clock_list)
     
 
     cons += cons_clk
+    cons += cons_rst
     cons += cons_io
     print (cons)
 
