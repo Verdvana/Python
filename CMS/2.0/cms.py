@@ -56,8 +56,9 @@ def error_exit(msg):
 
 def parse_design(sheet):
     Design.top = sheet['B2'].value
-    if Design.top is None:
+    if Design.top is None or str(Design.top).strip() == "":
         error_exit("未定义顶层模块名称")
+    print(f"Design top module name: {Design.top}")
     if Design.top in os.environ:
         print(f"Capture the environment variable {Design.top} as the top module name.")
     else:
@@ -76,6 +77,14 @@ def parse_design(sheet):
         error_exit(f"Error: Not find RTL files in {Design.rtl_path} with pattern {rtl_pattern}")
     Design.rtl_list = " ".join(os.path.basename(f) for f in Design.rtl_list)
     print(f"RTL files found: {Design.rtl_list}")
+
+    Design.lib_list = sheet['B5'].value
+    if Design.lib_list is None or str(Design.lib_list).strip() == "":
+        error_exit("Error: Not define library files")
+    for ch in [",", ";", "\n", "\r"]:
+        Design.lib_list = Design.lib_list.replace(ch, " ")
+    Design.lib_list = " ".join(Design.lib_list.split())
+    print(f"Library files: {Design.lib_list}")
 
 
 
