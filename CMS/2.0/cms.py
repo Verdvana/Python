@@ -73,6 +73,7 @@ def parse_design(sheet):
     Design.rtl_list = []
     for pattern in rtl_pattern:
         Design.rtl_list.extend(glob.glob(os.path.join(Design.rtl_path, pattern)))
+    print(Design.rtl_list)
     if not Design.rtl_list:
         error_exit(f"Error: Not find RTL files in {Design.rtl_path} with pattern {rtl_pattern}")
     Design.rtl_list = " ".join(os.path.basename(f) for f in Design.rtl_list)
