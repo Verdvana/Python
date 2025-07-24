@@ -55,6 +55,7 @@ def error_exit(msg):
     sys.exit(1)
 
 def parse_design(sheet):
+    print(os.environ['STA_Lab'])
     Design.top = sheet['B2'].value
     if Design.top is None or str(Design.top).strip() == "":
         error_exit("未定义顶层模块名称")
