@@ -1,6 +1,7 @@
 import sys
 import re
 import os
+import glob
 import openpyxl
 from dataclasses import dataclass,field
 
@@ -10,8 +11,8 @@ class Design:
     path:str="None"
     top:str="None"
     rtl_path:str="None"
+    rtl_list:str="None"
     tb_path:str="None"
-    rtl_file:str="None"
     param:str="None"
     lib_list:str="None"
 
@@ -19,14 +20,12 @@ class Design:
 class Range:
     min:str="None"
     max:str="None"
-
 @dataclass
 class DrivingCell:
     name:str="None"
     input:str="None"
     output:str="None"
     lib:str="None"
-
 @dataclass
 class ClockTree:
     source_latency:Range=field(default_factory=Range)
@@ -34,7 +33,6 @@ class ClockTree:
     trans:Range=field(default_factory=Range)
     skew:str="None"
     noise:str="None"
-
 @dataclass
 class Config:
     signal_driving_cell:DrivingCell=field(default_factory=DrivingCell)
@@ -51,6 +49,10 @@ class Config:
     md_ct:ClockTree=field(default_factory=ClockTree)
     lg_ct:ClockTree=field(default_factory=ClockTree)
     raw_ct:ClockTree=field(default_factory=ClockTree)
+
+def error_exit(msg):
+    print(f"错误：{msg}", file=sys.stderr)
+    sys.exit(1)
 
 def parse_design(sheet):
     Design.top = sheet['B1'].value
