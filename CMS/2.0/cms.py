@@ -266,6 +266,13 @@ def gen_cms_cons_synth(synth_config,path):
     cons += f"\nsource {path.cons_path}/{path.top}.tcl"
     cons += "\ncheck_timing\nset_host_option -max_cores 8"
     cons += "\ncompile -map_effort high"
+    cons += "\nchange_names -rules verilog -hierarchy"
+    cons += "\nwrite -f ddc -hierarchy -output ${MAPPED_PATH}/${TOP_MODULE}.ddc"
+    cons += "write -f verilog -hierarchy -output ${MAPPED_PATH}/${TOP_MODULE}.v"
+    cons += "write_sdc -version 1.7 ${MAPPED_PATH}/${TOP_MODULE}.sdc"
+    cons += "write_sdf -version 2.1 ${MAPPED_PATH}/${TOP_MODULE}.sdf"
+
+
     #cons += f"\n{synth_config.path}"
 
     
