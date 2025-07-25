@@ -8,15 +8,19 @@ from dataclasses import dataclass,field
 #============================================================
 # Define data class
 @dataclass
-class Design:
-    path:str="None"
+class Path:
     top:str="None"
+    top_path:str="None"
     rtl_path:str="None"
     rtl_list:str="None"
     tb_path:str="None"
+    cons_path:str="None"
     param:str="None"
-    lib_list:str="None"
-
+    lib_path:str="None"
+    lib_target:str="None"
+    lib_link:str="None"
+    lib_symbol:str="None"
+    lib_synthetic:str="None"
 @dataclass
 class Range:
     min:str="None"
@@ -36,6 +40,7 @@ class ClockTree:
     noise:str="None"
 @dataclass
 class Config:
+    path:str="None"
     signal_driving_cell:DrivingCell=field(default_factory=DrivingCell)
     clock_driving_cell:DrivingCell=field(default_factory=DrivingCell)
     signal_trans:Range=field(default_factory=Range)
@@ -54,48 +59,95 @@ class Config:
 def error_exit(msg):
     print(f"错误：{msg}", file=sys.stderr)
     sys.exit(1)
-
-
-def parse_design(sheet):
-    design=Design()
-    design.top = sheet['B2'].value
-    if design.top is None or str(design.top).strip() == "":
-        error_exit("未定义顶层模块名称")
-    print(f"Design top module name: {design.top}")
-    if design.top in os.environ:
-        print(f"Capture the environment variable {design.top} as the top module name.")
-        raw_path = os.environ.get(design.top)
+def standardize_list(list):
+    if not list:
+        return ""
+    return list.replace(","," ").replace(";"," ").replace("\n"," ").replace("\r"," ")
+#def is_empty(var):
+def parse_path(sheet):
+    path=Path()
+    path.top = sheet['B1'].value
+    if path.top is None or str(path.top).strip() == "":
+        error_exit("Not define top module.")
+    print(f"Design top module: {path.top}")
+    if path.top in os.environ:
+        path.top_path = os.environ.get(path.top)
     else:
-        raw_path = sheet['B1'].value
-        if raw_path is None:
+        path.top_path = sheet['B2'].value
+        if path.top_path is None:
             error_exit("Error: Not define design path")
 
-    design.rtl_path = sheet['B3'].value
-    design.rtl_path = re.sub(r"\$\{top\}",raw_path,design.rtl_path,flags=re.IGNORECASE)
+    path.rtl_path = sheet['B3'].value
+    path.rtl_path = re.sub(r"\$\{top\}",path.top_path,path.rtl_path,flags=re.IGNORECASE)
     rtl_pattern = ["*.v", "*.sv", "*.vhd", "*.vhdl"]
-    design.rtl_list = []
+    path.rtl_list = []
     for pattern in rtl_pattern:
-        design.rtl_list.extend(glob.glob(os.path.join(design.rtl_path, pattern)))
+        path.rtl_list.extend(glob.glob(os.path.join(path.rtl_path, pattern)))
 
-    if not design.rtl_list:
-        error_exit(f"Error: Not find RTL files in {design.rtl_path} with pattern {rtl_pattern}")
-    design.rtl_list = " ".join(os.path.basename(f) for f in design.rtl_list)
-    print(f"RTL files found: {design.rtl_list}")
+    if not path.rtl_list:
+        error_exit(f"Not find RTL files in {path.rtl_path} with pattern {rtl_pattern}")
+    path.rtl_list = " ".join(os.path.basename(f) for f in path.rtl_list)
+    print(f"RTL files found: {path.rtl_list}")
 
-    design.lib_list = sheet['B5'].value
-    if design.lib_list is None or str(design.lib_list).strip() == "":
-        error_exit("Error: Not define library files")
-    for ch in [",", ";", "\n", "\r"]:
-        design.lib_list = design.lib_list.replace(ch, " ")
-    design.lib_list = " ".join(design.lib_list.split())
-    print(f"Library files: {design.lib_list}")
+    top_pattern = path.top+"."
+    top_match = [item for item in path.rtl_list.split() if top_pattern in item]
+    if len(top_match) == 1:
+        top_file = top_match[0]
+    else:
+        print(f"Top-level file: {top_match}")
+        error_exit("The top-level file is not unique or not found.")
+    print(f"Top-level file: {top_file}")
+
+    param_lines = []
+    found_param = False
+    with open(path.rtl_path+"/"+top_file,'r',encoding='utf-8') as file:
+        for line in file:
+            stripped = line.strip()
+            if stripped.startswith("//"):
+                continue
+            if not found_param:
+                if "parameter" in stripped:
+                    found_param = True
+                    param_lines.append(stripped)
+            else:
+                param_lines.append(stripped)
+                if ")" in stripped:
+                    break
+    path.param = " ".join(param_lines).replace("\n"," ").replace("\r"," ")
+    path.param = path.param[len("parameter"):].lstrip()
+    path.param = path.param.split(")")[0].rstrip()
+    print(f"Parameter of top design: {path.param}")
 
 
-    return design
 
-def parse_config(sheet):
+
+    path.tb_path = sheet['B4'].value
+    path.tb_path = re.sub(r"\$\{top\}",path.top_path,path.tb_path,flags=re.IGNORECASE)
+
+    path.cons_path = sheet['B5'].value
+    path.cons_path = re.sub(r"\$\{top\}",path.top_path,path.cons_path,flags=re.IGNORECASE)
+
+    path.lib_path = sheet['B6'].value
+    path.lib_path = re.sub(r"\$\{top\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
+
+    path.lib_target = standardize_list(sheet['B9'].value)
+    if path.lib_target is None or str(path.lib_target).strip() == "":
+        error_exit("Not define target library")
+    print(f"Target Library: {path.lib_target}")
+    path.lib_link = path.lib_target + " " + standardize_list(sheet['C9'].value) + " *"
+    print(f"Link Library: {path.lib_link}")
+    path.lib_symbol = standardize_list(sheet['D9'].value)
+    if path.lib_symbol is None or str(path.lib_symbol).strip() == "":
+        error_exit("Not define symbol library")
+    print(f"Symbol Library: {path.lib_symbol}")
+    path.lib_synthetic = standardize_list(sheet['E9'].value)
+    print(f"Synthetic Library: {path.lib_synthetic}")
+
+    return path
+
+def parse_config(sheet,path):
     config=Config()
-    
+    config.path                         = sheet['B1'].value
     config.signal_driving_cell.name     = sheet['B3'].value
     config.signal_driving_cell.output   = sheet['D3'].value
     config.signal_driving_cell.input    = sheet['E3'].value
@@ -150,7 +202,7 @@ def parse_config(sheet):
     config.raw_ct.trans.max             = sheet['G23'].value
     config.raw_ct.skew                  = sheet['H23'].value
     config.raw_ct.noise                 = sheet['I23'].value
-    
+    config.path = re.sub(r"\$\{top\}",path.top_path,config.path,flags=re.IGNORECASE)
     return config
 
 def parse_clock(sheet):
@@ -199,19 +251,23 @@ def parse_io(sheet):
 def gen_cms_cons_pt(pt_config):
     cons = ""
 
-def gen_cms_cons_synth(synth_config,design):
-    print (synth_config)
+def gen_cms_cons_synth(synth_config,path):
     cons = "\n#========================================\n#Add LIB"
-    cons += f"\nread_db [list {design.lib_list}]"
-    cons += f"\nset TOP_MODULE {design.top}"
-    cons += f"\nanalyze -f sverilog [list {design.rtl_list}]"
-    cons += f"\nelaborate $TOP_MODULE -parameter \" \""
+    cons += f"\nread_db [list {path.lib_target}]"
+    cons += f"\nset TOP_MODULE {path.top}"
+    cons += f"\nanalyze -f sverilog [list {path.rtl_list}]"
+    cons += f"\nelaborate $TOP_MODULE -parameter \"{path.param}\""
     cons += f"\ncurrent_design TOP_MODULE"
     cons += "\nif {[check_design] == 0} {\n   echo \"Check Design Error!\";\n   exit;\n}"
     cons += "\nreset_design"
     cons += "\nuniquify"       
     cons += "\nset uniquify_naming_style   \“%s_%d\”"
     cons += "\nwrite -f ddc -hierarchy -output ${UNMAPPED_PATH}/${TOP_MODULE}.ddc"
+    cons += f"\nsource {path.cons_path}/{path.top}.tcl"
+    cons += "\ncheck_timing\nset_host_option -max_cores 8"
+    cons += "\ncompile -map_effort high"
+    #cons += f"\n{synth_config.path}"
+
     
     print(cons)
 
@@ -313,14 +369,14 @@ def main(filename):
     cons = ""
     wb = openpyxl.load_workbook(filename)
 
-    if 'design' in wb.sheetnames:
-        design = parse_design(wb['design'])
+    if 'path' in wb.sheetnames:
+        path = parse_path(wb['path'])
     if 'pt' in wb.sheetnames:
-        pt_config = parse_config(wb['pt'])
+        pt_config = parse_config(wb['pt'],path)
         #cons_pt = gen_cms_cons_pt(pt_config,design)
     if 'synth' in wb.sheetnames:
-        synth_config = parse_config(wb['synth'])
-        cons_synth = gen_cms_cons_synth(synth_config,design)
+        synth_config = parse_config(wb['synth'],path)
+        cons_synth = gen_cms_cons_synth(synth_config,path)
 
     if 'clock' in wb.sheetnames:
         clock_dict = parse_clock(wb['clock'])
