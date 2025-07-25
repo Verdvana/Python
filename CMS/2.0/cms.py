@@ -5,7 +5,8 @@ import glob
 import openpyxl
 from dataclasses import dataclass,field
 
-
+#============================================================
+# Define data class
 @dataclass
 class Design:
     path:str="None"
@@ -54,41 +55,43 @@ def error_exit(msg):
     print(f"错误：{msg}", file=sys.stderr)
     sys.exit(1)
 
+
 def parse_design(sheet):
-    Design.top = sheet['B2'].value
-    if Design.top is None or str(Design.top).strip() == "":
+    design=Design()
+    design.top = sheet['B2'].value
+    if design.top is None or str(design.top).strip() == "":
         error_exit("未定义顶层模块名称")
-    print(f"Design top module name: {Design.top}")
-    if Design.top in os.environ:
-        print(f"Capture the environment variable {Design.top} as the top module name.")
+    print(f"Design top module name: {design.top}")
+    if design.top in os.environ:
+        print(f"Capture the environment variable {design.top} as the top module name.")
+        raw_path = os.environ.get(design.top)
     else:
         raw_path = sheet['B1'].value
         if raw_path is None:
             error_exit("Error: Not define design path")
-        os.environ[Design.top] = str(raw_path)
-        print(f"Set the environment variable {Design.top} as the top module name.")
-    
-    Design.rtl_path = sheet['B3'].value
-    rtl_pattern = ["*.v", "*.sv", "*.vhd", "*.vhdl"]
-    Design.rtl_list = []
-    for pattern in rtl_pattern:
-        Design.rtl_list.extend(glob.glob(os.path.join(Design.rtl_path, pattern)))
-    print(Design.rtl_list)
-    if not Design.rtl_list:
-        error_exit(f"Error: Not find RTL files in {Design.rtl_path} with pattern {rtl_pattern}")
-    Design.rtl_list = " ".join(os.path.basename(f) for f in Design.rtl_list)
-    print(f"RTL files found: {Design.rtl_list}")
 
-    Design.lib_list = sheet['B5'].value
-    if Design.lib_list is None or str(Design.lib_list).strip() == "":
+    design.rtl_path = sheet['B3'].value
+    design.rtl_path = re.sub(r"\$\{top\}",raw_path,design.rtl_path,flags=re.IGNORECASE)
+    rtl_pattern = ["*.v", "*.sv", "*.vhd", "*.vhdl"]
+    design.rtl_list = []
+    for pattern in rtl_pattern:
+        design.rtl_list.extend(glob.glob(os.path.join(design.rtl_path, pattern)))
+
+    if not design.rtl_list:
+        error_exit(f"Error: Not find RTL files in {design.rtl_path} with pattern {rtl_pattern}")
+    design.rtl_list = " ".join(os.path.basename(f) for f in design.rtl_list)
+    print(f"RTL files found: {design.rtl_list}")
+
+    design.lib_list = sheet['B5'].value
+    if design.lib_list is None or str(design.lib_list).strip() == "":
         error_exit("Error: Not define library files")
     for ch in [",", ";", "\n", "\r"]:
-        Design.lib_list = Design.lib_list.replace(ch, " ")
-    Design.lib_list = " ".join(Design.lib_list.split())
-    print(f"Library files: {Design.lib_list}")
+        design.lib_list = design.lib_list.replace(ch, " ")
+    design.lib_list = " ".join(design.lib_list.split())
+    print(f"Library files: {design.lib_list}")
 
 
-
+    return design
 
 def parse_config(sheet):
     config=Config()
@@ -196,13 +199,21 @@ def parse_io(sheet):
 def gen_cms_cons_pt(pt_config):
     cons = ""
 
-def gen_cms_cons_synth(synth_config):
+def gen_cms_cons_synth(synth_config,design):
     print (synth_config)
     cons = "\n#========================================\n#Add LIB"
-    cons += f"\nread_db [list typical.db fast.db slow.db]"
-    #cons += f"\nset TOP_MODULE {design}"
-    #cons += f""
-
+    cons += f"\nread_db [list {design.lib_list}]"
+    cons += f"\nset TOP_MODULE {design.top}"
+    cons += f"\nanalyze -f sverilog [list {design.rtl_list}]"
+    cons += f"\nelaborate $TOP_MODULE -parameter \" \""
+    cons += f"\ncurrent_design TOP_MODULE"
+    cons += "\nif {[check_design] == 0} {\n   echo \"Check Design Error!\";\n   exit;\n}"
+    cons += "\nreset_design"
+    cons += "\nuniquify"       
+    cons += "\nset uniquify_naming_style   \“%s_%d\”"
+    cons += "\nwrite -f ddc -hierarchy -output ${UNMAPPED_PATH}/${TOP_MODULE}.ddc"
+    
+    print(cons)
 
 def gen_cms_cons_clk(clock_dict):
     cons = "\n#========================================\n#Clock Constraint"
@@ -303,13 +314,13 @@ def main(filename):
     wb = openpyxl.load_workbook(filename)
 
     if 'design' in wb.sheetnames:
-        design_set = parse_design(wb['design'])
+        design = parse_design(wb['design'])
     if 'pt' in wb.sheetnames:
         pt_config = parse_config(wb['pt'])
-        cons_pt = gen_cms_cons_pt(pt_config)
+        #cons_pt = gen_cms_cons_pt(pt_config,design)
     if 'synth' in wb.sheetnames:
         synth_config = parse_config(wb['synth'])
-        cons_synth = gen_cms_cons_synth(synth_config)
+        cons_synth = gen_cms_cons_synth(synth_config,design)
 
     if 'clock' in wb.sheetnames:
         clock_dict = parse_clock(wb['clock'])
@@ -330,7 +341,7 @@ def main(filename):
     cons += cons_clk
     cons += cons_rst
     cons += cons_io
-    print (cons)
+    #print (cons)
 
     
     wb.close()
