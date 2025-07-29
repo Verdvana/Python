@@ -1,0 +1,44 @@
+echo "***********************************************************"
+echo "************** Start load .synopsys_dc.setup **************"
+echo "***********************************************************"
+
+set SYN_ROOT_PATH				/home/verdvana/Project/IC/project/lab/sta_lab
+set PDK_PATH					/home/verdvana/Project/IC/library/PDK/TSMC90
+set RTL_PATH					$SYN_ROOT_PATH/../*/design/rtl  
+set CONFIG_PATH					$SYN_ROOT_PATH/synthesis/config
+set SCRIPT_PATH					$SYN_ROOT_PATH/synthesis/scirpts
+set MAPPED_PATH					$SYN_ROOT_PATH/synthesis/mapped
+set REPORT_PATH					$SYN_ROOT_PATH/synthesis/report
+set UNMAPPED_PATH				$SYN_ROOT_PATH/synthesis/unmapped
+set SPRAM_PATH					$SYN_ROOT_PATH/design/memory/spram
+set DPRAM_PATH					$SYN_ROOT_PATH/design/memory/dpram
+set ROM_PATH					$SYN_ROOT_PATH/design/memory/rom
+
+
+# 设置工作路径
+
+set WORK_PATH					$SYN_ROOT_PATH/synthesis/work
+set DC_PATH						/usr/software/synopsys/dc/syn/O-2018.06-SP5-5
+
+set SYMBOL_PATH					$PDK_PATH/symbols/synopsys
+set LIB_PATH					$PDK_PATH/synopsys
+
+
+#
+
+set_app_var search_path			[list 	. $search_path	$LIB_PATH	\
+										$SYMBOL_PATH	$RTL_PATH	\
+										$SCRIPT_PATH				\
+										$SPRAM_PATH		$DPRAM_PATH	\
+										$ROM_PATH					\
+										${DC_PATH}/libraries/syn]
+set_app_var target_library		[list	typical.db fast.db slow.db]
+set_app_var link_library		[list	typical.db fast.db slow.db  *]
+set_app_var symbol_library		[list	tsmc090.sdb]
+set_app_var synthetic_library   [list   ]
+
+alias		s					source
+
+echo "***********************************************************"
+echo "************* End of load .synopsys_dc.setup **************"
+echo "***********************************************************"

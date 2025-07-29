@@ -17,16 +17,19 @@ class Path:
     rtl_list:str="None"
     tb_path:str="None"
     cons_path:str="None"
+    mem_path:str="None"
     param:str="None"
     lib_path:str="None"
-    lib_target:str="None"
-    lib_link:str="None"
-    lib_symbol:str="None"
-    lib_synthetic:str="None"
 @dataclass
 class Range:
     min:str="None"
     max:str="None"
+@dataclass
+class Library:
+    target:str="None"
+    link:str="None"
+    symbol:str="None"
+    synthetic:str="None"
 @dataclass
 class DrivingCell:
     name:str="None"
@@ -42,7 +45,9 @@ class ClockTree:
     noise:str="None"
 @dataclass
 class Config:
-    path:str="None"
+    path_root:str="None"
+    path_sub:str="None"
+    library:Library=field(default_factory=Library)
     signal_driving_cell:DrivingCell=field(default_factory=DrivingCell)
     clock_driving_cell:DrivingCell=field(default_factory=DrivingCell)
     signal_trans:Range=field(default_factory=Range)
@@ -58,12 +63,21 @@ class Config:
     lg_ct:ClockTree=field(default_factory=ClockTree)
     raw_ct:ClockTree=field(default_factory=ClockTree)
 
-
+def replace_in_file(file_path,target,replacement):
+    if replacement is None:
+        replacement = ""
+    with open(file_path,'r+',encoding='utf-8') as f:
+        content = f.read()
+        f.seek(0)
+        f.write(content.replace(target,replacement))
+        f.truncate()
 def error_exit(msg):
     print(f"错误：{msg}", file=sys.stderr)
     sys.exit(1)
 def standardize_list(list):
     if not list:
+        return ""
+    elif list is None:
         return ""
     return list.replace(","," ").replace(";"," ").replace("\n"," ").replace("\r"," ")
 #def is_empty(var):
@@ -77,11 +91,12 @@ def parse_path(sheet):
         path.top_path = os.environ.get(path.top)
     else:
         path.top_path = sheet['B2'].value
+        path.top_path = re.sub(r"\$\{top\}",path.top,path.top_path,flags=re.IGNORECASE)
         if path.top_path is None:
             error_exit("Error: Not define design path")
 
     path.rtl_path = sheet['B3'].value
-    path.rtl_path = re.sub(r"\$\{top\}",path.top_path,path.rtl_path,flags=re.IGNORECASE)
+    path.rtl_path = re.sub(r"\$\{top_path\}",path.top_path,path.rtl_path,flags=re.IGNORECASE)
     rtl_pattern = ["*.v", "*.sv", "*.vhd", "*.vhdl"]
     path.rtl_list = []
     for pattern in rtl_pattern:
@@ -125,87 +140,91 @@ def parse_path(sheet):
 
 
     path.tb_path = sheet['B4'].value
-    path.tb_path = re.sub(r"\$\{top\}",path.top_path,path.tb_path,flags=re.IGNORECASE)
+    path.tb_path = re.sub(r"\$\{top_path\}",path.top_path,path.tb_path,flags=re.IGNORECASE)
 
     path.cons_path = sheet['B5'].value
-    path.cons_path = re.sub(r"\$\{top\}",path.top_path,path.cons_path,flags=re.IGNORECASE)
+    path.cons_path = re.sub(r"\$\{top_path\}",path.top_path,path.cons_path,flags=re.IGNORECASE)
 
-    path.lib_path = sheet['B6'].value
-    path.lib_path = re.sub(r"\$\{top\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
+    path.mem_path = sheet['B6'].value
+    path.mem_path = re.sub(r"\$\{top_path\}",path.top_path,path.mem_path,flags=re.IGNORECASE)
 
-    path.lib_target = standardize_list(sheet['B9'].value)
-    if path.lib_target is None or str(path.lib_target).strip() == "":
-        error_exit("Not define target library")
-    print(f"Target Library: {path.lib_target}")
-    path.lib_link = path.lib_target + " " + standardize_list(sheet['C9'].value) + " *"
-    print(f"Link Library: {path.lib_link}")
-    path.lib_symbol = standardize_list(sheet['D9'].value)
-    if path.lib_symbol is None or str(path.lib_symbol).strip() == "":
-        error_exit("Not define symbol library")
-    print(f"Symbol Library: {path.lib_symbol}")
-    path.lib_synthetic = standardize_list(sheet['E9'].value)
-    print(f"Synthetic Library: {path.lib_synthetic}")
+    path.lib_path = sheet['B7'].value
+    path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
 
     return path
 
 def parse_config(sheet,path):
     config=Config()
-    config.path                         = sheet['B1'].value
-    config.signal_driving_cell.name     = sheet['B3'].value
-    config.signal_driving_cell.output   = sheet['D3'].value
-    config.signal_driving_cell.input    = sheet['E3'].value
-    config.signal_driving_cell.lib      = sheet['F3'].value
-    config.clock_driving_cell.name      = sheet['B4'].value
-    config.clock_driving_cell.output    = sheet['D4'].value
-    config.clock_driving_cell.input     = sheet['E4'].value
-    config.clock_driving_cell.lib       = sheet['F4'].value
-    config.signal_trans.min             = sheet['B7'].value
-    config.signal_trans.max             = sheet['C7'].value
-    config.output_load.min              = sheet['B8'].value
-    config.output_load.max              = sheet['C8'].value
-    config.output_trans.min             = sheet['B9'].value
-    config.output_trans.max             = sheet['C9'].value
-    config.output_delay.min             = sheet['B10'].value
-    config.output_delay.max             = sheet['C10'].value
-    config.input_delay.min              = sheet['B11'].value
-    config.input_delay.max              = sheet['C11'].value
-    config.input_trans.min              = sheet['B12'].value
-    config.input_trans.max              = sheet['C12'].value
-    config.setup_margin                 = sheet['B14'].value
-    config.hold_margin                  = sheet['B15'].value
-    config.sm_ct.source_latency.min     = sheet['B20'].value
-    config.sm_ct.source_latency.max     = sheet['C20'].value
-    config.sm_ct.network_latency.min    = sheet['D20'].value
-    config.sm_ct.network_latency.max    = sheet['E20'].value
-    config.sm_ct.trans.min              = sheet['F20'].value
-    config.sm_ct.trans.max              = sheet['G20'].value
-    config.sm_ct.skew                   = sheet['H20'].value
-    config.sm_ct.noise                  = sheet['I20'].value
-    config.md_ct.source_latency.min     = sheet['B21'].value
-    config.md_ct.source_latency.max     = sheet['C21'].value
-    config.md_ct.network_latency.min    = sheet['D21'].value
-    config.md_ct.network_latency.max    = sheet['E21'].value
-    config.md_ct.trans.min              = sheet['F21'].value
-    config.md_ct.trans.max              = sheet['G21'].value
-    config.md_ct.skew                   = sheet['H21'].value
-    config.md_ct.noise                  = sheet['I21'].value
-    config.lg_ct.source_latency.min     = sheet['B22'].value
-    config.lg_ct.source_latency.max     = sheet['C22'].value
-    config.lg_ct.network_latency.min    = sheet['D22'].value
-    config.lg_ct.network_latency.max    = sheet['E22'].value
-    config.lg_ct.trans.min              = sheet['F22'].value
-    config.lg_ct.trans.max              = sheet['G22'].value
-    config.lg_ct.skew                   = sheet['H22'].value
-    config.lg_ct.noise                  = sheet['I22'].value
-    config.raw_ct.source_latency.min    = sheet['B23'].value
-    config.raw_ct.source_latency.max    = sheet['C23'].value
-    config.raw_ct.network_latency.min   = sheet['D23'].value
-    config.raw_ct.network_latency.max   = sheet['E23'].value
-    config.raw_ct.trans.min             = sheet['F23'].value
-    config.raw_ct.trans.max             = sheet['G23'].value
-    config.raw_ct.skew                  = sheet['H23'].value
-    config.raw_ct.noise                 = sheet['I23'].value
-    config.path = re.sub(r"\$\{top\}",path.top_path,config.path,flags=re.IGNORECASE)
+    config.path_root                    = sheet['B1'].value
+    config.path_sub                     = standardize_list(sheet['C2'].value)
+    config.library.target               = standardize_list(sheet['B5'].value)
+    config.library.link                 = standardize_list(sheet['C5'].value)
+    config.library.symbol               = sheet['D5'].value
+    config.library.synthetic            = sheet['E5'].value
+    config.signal_driving_cell.name     = sheet['B8'].value
+    config.signal_driving_cell.output   = sheet['D8'].value
+    config.signal_driving_cell.input    = sheet['E8'].value
+    config.signal_driving_cell.lib      = sheet['F8'].value
+    config.clock_driving_cell.name      = sheet['B9'].value
+    config.clock_driving_cell.output    = sheet['D9'].value
+    config.clock_driving_cell.input     = sheet['E9'].value
+    config.clock_driving_cell.lib       = sheet['F9'].value
+    config.signal_trans.min             = sheet['B12'].value
+    config.signal_trans.max             = sheet['C12'].value
+    config.output_load.min              = sheet['B13'].value
+    config.output_load.max              = sheet['C13'].value
+    config.output_trans.min             = sheet['B14'].value
+    config.output_trans.max             = sheet['C14'].value
+    config.output_delay.min             = sheet['B15'].value
+    config.output_delay.max             = sheet['C15'].value
+    config.input_delay.min              = sheet['B16'].value
+    config.input_delay.max              = sheet['C16'].value
+    config.input_trans.min              = sheet['B17'].value
+    config.input_trans.max              = sheet['C17'].value
+    config.setup_margin                 = sheet['B19'].value
+    config.hold_margin                  = sheet['B20'].value
+    config.sm_ct.source_latency.min     = sheet['B25'].value
+    config.sm_ct.source_latency.max     = sheet['C25'].value
+    config.sm_ct.network_latency.min    = sheet['D25'].value
+    config.sm_ct.network_latency.max    = sheet['E25'].value
+    config.sm_ct.trans.min              = sheet['F25'].value
+    config.sm_ct.trans.max              = sheet['G25'].value
+    config.sm_ct.skew                   = sheet['H25'].value
+    config.sm_ct.noise                  = sheet['I25'].value
+    config.md_ct.source_latency.min     = sheet['B26'].value
+    config.md_ct.source_latency.max     = sheet['C26'].value
+    config.md_ct.network_latency.min    = sheet['D26'].value
+    config.md_ct.network_latency.max    = sheet['E26'].value
+    config.md_ct.trans.min              = sheet['F26'].value
+    config.md_ct.trans.max              = sheet['G26'].value
+    config.md_ct.skew                   = sheet['H26'].value
+    config.md_ct.noise                  = sheet['I26'].value
+    config.lg_ct.source_latency.min     = sheet['B27'].value
+    config.lg_ct.source_latency.max     = sheet['C27'].value
+    config.lg_ct.network_latency.min    = sheet['D27'].value
+    config.lg_ct.network_latency.max    = sheet['E27'].value
+    config.lg_ct.trans.min              = sheet['F27'].value
+    config.lg_ct.trans.max              = sheet['G27'].value
+    config.lg_ct.skew                   = sheet['H27'].value
+    config.lg_ct.noise                  = sheet['I27'].value
+    config.raw_ct.source_latency.min    = sheet['B28'].value
+    config.raw_ct.source_latency.max    = sheet['C28'].value
+    config.raw_ct.network_latency.min   = sheet['D28'].value
+    config.raw_ct.network_latency.max   = sheet['E28'].value
+    config.raw_ct.trans.min             = sheet['F28'].value
+    config.raw_ct.trans.max             = sheet['G28'].value
+    config.raw_ct.skew                  = sheet['H28'].value
+    config.raw_ct.noise                 = sheet['I28'].value
+
+    if config.library.target is None or str(config.library.target).strip() == "":
+        error_exit("Not define target library")
+    print(f"Target Library: {config.library.target}")
+    config.library.link = config.library.target + " " + config.library.link + " *"
+    print(f"Link Library: {config.library.link}")
+    if config.library.symbol is None or str(config.library.symbol).strip() == "":
+        error_exit("Not define symbol library")
+    print(f"Symbol Library: {config.library.symbol}")
+    print(f"Synthetic Library: {config.library.synthetic}")
     return config
 
 def parse_clock(sheet):
@@ -255,45 +274,36 @@ def gen_cms_cons_pt(pt_config):
     cons = ""
 
 def gen_cms_cons_synth(synth_config,path):
-    sync_cons_temp = "/home/verdvana/Project/Python/pms/1.0/templates/syth.tcl"
-    synth_scripts = synth_config.path+"/scripts"
-    top_cons = synth_scripts + "/" + path.top + ".tcl"
-    if os.path.exists(synth_config.path):
-        user_input = input(f"Warning: DIR {synth_config.path} existed, do you want to clean it and continue?(y/n):").strip().lower()
+    script_dir=os.path.dirname(os.path.abspath(__file__))
+    synth_cons_temp = script_dir + "/templates/syth.tcl"
+    synopsys_setup_temp = script_dir + "/templates/.synopsys_dc.setup"
+    sub_dir = ['scripts','work','reports','config','mapped','unmapped']
+
+    top_cons = synth_config.path_root + "/scripts/" + path.top + ".tcl"
+    synopsys_setup = synth_config.path_root+"/work/.synopsys_dc.setup"
+    if os.path.exists(synth_config.path_root):
+        user_input = input(f"Warning: DIR {synth_config.path_root} existed, do you want to clean it and continue?(y/n):").strip().lower()
         if user_input == "y":
-            shutil.rmtree(synth_config.path)
+            shutil.rmtree(synth_config.path_root)
         elif user_input == "n":
-            print("Warning: User terminal script.")
-            sys.exit(1)
+            error_exit("User terminal script.")
         else:
-            print("Error: Input error.")
-            sys.exit(1)
-    os.makedirs(synth_config.path)
-    os.makedirs(synth_scripts)
-    shutil.copy(sync_cons_temp,top_cons)
+            error_exit("Input error.")
+    for dir in sub_dir:
+        new_dir = os.path.join(synth_config.path_root,dir)
+        os.makedirs(new_dir)
+    shutil.copy(synth_cons_temp,top_cons)
+    shutil.copy(synopsys_setup_temp,synopsys_setup)
 
-    open(top_cons,'w').write(open(top_cons).read().replace('__TOP__',path.top))
-    cons = "\n#========================================\n#Add LIB"
-    cons += f"\nread_db [list {path.lib_target}]"
-    cons += f"\nset TOP_MODULE {path.top}"
-    cons += f"\nanalyze -f sverilog [list {path.rtl_list}]"
-    cons += f"\nelaborate $TOP_MODULE -parameter \"{path.param}\""
-    cons += f"\ncurrent_design TOP_MODULE"
-    cons += "\nif {[check_design] == 0} {\n   echo \"Check Design Error!\";\n   exit;\n}"
-    cons += "\nreset_design"
-    cons += "\nuniquify"       
-    cons += "\nset uniquify_naming_style   \“%s_%d\”"
-    cons += "\nwrite -f ddc -hierarchy -output ${UNMAPPED_PATH}/${TOP_MODULE}.ddc"
-    cons += f"\nsource {path.cons_path}/{path.top}.tcl"
-    cons += "\ncheck_timing\nset_host_option -max_cores 8"
-    cons += "\ncompile -map_effort high"
-    cons += "\nchange_names -rules verilog -hierarchy"
-    cons += "\nwrite -f ddc -hierarchy -output ${MAPPED_PATH}/${TOP_MODULE}.ddc"
-    cons += "write -f verilog -hierarchy -output ${MAPPED_PATH}/${TOP_MODULE}.v"
-    cons += "write_sdc -version 1.7 ${MAPPED_PATH}/${TOP_MODULE}.sdc"
-    cons += "write_sdf -version 2.1 ${MAPPED_PATH}/${TOP_MODULE}.sdf"
+    replace_in_file(synopsys_setup,'__ROOT__',path.top_path)
+    replace_in_file(synopsys_setup,'__LIB_PATH__',path.lib_path)
+    replace_in_file(synopsys_setup,'__TARGET_LIB__',synth_config.library.target)
+    replace_in_file(synopsys_setup,'__LINK_LIB__',synth_config.library.link)
+    replace_in_file(synopsys_setup,'__SYMBOL_LIB__',synth_config.library.symbol)
+    replace_in_file(synopsys_setup,'__SYNTH_LIB__',synth_config.library.synthetic)
+    replace_in_file(top_cons,'__TOP__',path.top)
 
-
+    cons = ""
     #cons += f"\n{synth_config.path}"
 
     
