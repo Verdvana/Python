@@ -360,7 +360,7 @@ def gen_cons_clk(clock_dict):
     for name,row_data in clock_dict.items():
         cons += f"\n#Clock {name} - {row_data['comment']}"
         if clock_dict[name]['root'] is None:
-            cons += f"\ncreate_clock -name {name} -period {clock_dict[name]['period']}"
+            cons += f"\n#----------------------------------------\ncreate_clock -name {name} -period {clock_dict[name]['period']}"
         else:
             if "/" in clock_dict[name]['root']:
                 pin_or_port = "pins"
