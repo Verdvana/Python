@@ -68,7 +68,7 @@ set     LIB_NAME            __LIB_NAME__
 set     WIRE_LOAD_MODEL     __WIRE_LOAD_MODEL__
 set     DRIVE_CELL          __DRIVE_CELL__
 set     DRIVE_PIN           __DRIVE_PIN__
-set     OPERA_CONDITION     typical
+set     OPERA_CONDITION     __OPERA_CONDITION__
 set     ALL_IN_EXCEPT_CLK   [remove_from_collection [all_inputs] [get_ports $CLK_NAME]]
 set     INPUT_DELAY         [expr   $CLK_PERIOD*0.6]
 set     INPUT_TRANSITION    [expr   0.12]

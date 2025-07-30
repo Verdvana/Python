@@ -20,6 +20,7 @@ class Path:
     mem_path:str="None"
     param:str="None"
     lib_path:str="None"
+    sub_rtl_list:str="None"
 @dataclass
 class Range:
     min:str="None"
@@ -56,6 +57,8 @@ class Config:
     output_delay:Range=field(default_factory=Range)
     input_delay:Range=field(default_factory=Range)
     input_trans:Range=field(default_factory=Range)
+    wire_load_model:str="None"
+    opera_condition:str="None"
     setup_margin:str="None"
     hold_margin:str="None"
     sm_ct:ClockTree=field(default_factory=ClockTree)
@@ -80,23 +83,25 @@ def standardize_list(list):
     elif list is None:
         return ""
     return list.replace(","," ").replace(";"," ").replace("\n"," ").replace("\r"," ")
-#def is_empty(var):
+def get_env_var(var,bak):
+    if var in os.environ:
+        return os.environ.get(var)
+    else:
+        return bak
 def parse_path(sheet):
     path=Path()
     path.top = sheet['B1'].value
     if path.top is None or str(path.top).strip() == "":
         error_exit("Not define top module.")
     print(f"Design top module: {path.top}")
-    if path.top in os.environ:
-        path.top_path = os.environ.get(path.top)
-    else:
-        path.top_path = sheet['B2'].value
-        path.top_path = re.sub(r"\$\{top\}",path.top,path.top_path,flags=re.IGNORECASE)
-        if path.top_path is None:
-            error_exit("Error: Not define design path")
+    path.top_path = get_env_var(path.top,sheet['B2'].value)
+    path.top_path = re.sub(r"\$\{top\}",path.top,path.top_path,flags=re.IGNORECASE)
+    if path.top_path is None:
+        error_exit("Error: Not define design path")
 
     path.rtl_path = sheet['B3'].value
     path.rtl_path = re.sub(r"\$\{top_path\}",path.top_path,path.rtl_path,flags=re.IGNORECASE)
+    print(f"Top RTL dir: {path.rtl_path}")
     rtl_pattern = ["*.v", "*.sv", "*.vhd", "*.vhdl"]
     path.rtl_list = []
     for pattern in rtl_pattern:
@@ -151,11 +156,27 @@ def parse_path(sheet):
     path.lib_path = sheet['B7'].value
     path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
 
+    path.sub_rtl_list = ""
+    row_index   = 10
+    while True:
+        row = [cell.value for cell in sheet[row_index]]
+        if row[0] is None:
+            break
+        sub_path = get_env_var(row[0],row[1])
+        sub_sheet = openpyxl.load_workbook(os.path.join(sub_path,"pms",row[0]+".xlsx"))['path']
+        sub_rtl_path = sub_sheet['B3'].value
+        sub_rtl_path = re.sub(r"\$\{top_path\}",sub_path,sub_rtl_path,flags=re.IGNORECASE)
+
+        print(f"sub_rtl_path:{sub_rtl_path}")
+        path.sub_rtl_list += f" {sub_rtl_path}"
+        row_index += 1
+
+
     return path
 
 def parse_config(sheet,path):
     config=Config()
-    config.path_root                    = sheet['B1'].value
+    config.path_root                    = sheet['B2'].value
     config.path_sub                     = standardize_list(sheet['C2'].value)
     config.library.target               = standardize_list(sheet['B5'].value)
     config.library.link                 = standardize_list(sheet['C5'].value)
@@ -181,6 +202,8 @@ def parse_config(sheet,path):
     config.input_delay.max              = sheet['C16'].value
     config.input_trans.min              = sheet['B17'].value
     config.input_trans.max              = sheet['C17'].value
+    config.wire_load_model              = sheet['F12'].value
+    config.opera_condition              = sheet['F15'].value
     config.setup_margin                 = sheet['B19'].value
     config.hold_margin                  = sheet['B20'].value
     config.sm_ct.source_latency.min     = sheet['B25'].value
@@ -274,10 +297,11 @@ def gen_cms_cons_pt(pt_config):
     cons = ""
 
 def gen_cms_cons_synth(synth_config,path):
+    synth_config.path_root = path.top_path + "/" + synth_config.path_root 
     script_dir=os.path.dirname(os.path.abspath(__file__))
     synth_cons_temp = script_dir + "/templates/syth.tcl"
     synopsys_setup_temp = script_dir + "/templates/.synopsys_dc.setup"
-    sub_dir = ['scripts','work','reports','config','mapped','unmapped']
+    sub_dir = synth_config.path_sub.split()
 
     top_cons = synth_config.path_root + "/scripts/" + path.top + ".tcl"
     synopsys_setup = synth_config.path_root+"/work/.synopsys_dc.setup"
@@ -297,11 +321,25 @@ def gen_cms_cons_synth(synth_config,path):
 
     replace_in_file(synopsys_setup,'__ROOT__',path.top_path)
     replace_in_file(synopsys_setup,'__LIB_PATH__',path.lib_path)
+    replace_in_file(synopsys_setup,'__RTL_PATH__',path.rtl_path+path.sub_rtl_list)
     replace_in_file(synopsys_setup,'__TARGET_LIB__',synth_config.library.target)
     replace_in_file(synopsys_setup,'__LINK_LIB__',synth_config.library.link)
     replace_in_file(synopsys_setup,'__SYMBOL_LIB__',synth_config.library.symbol)
     replace_in_file(synopsys_setup,'__SYNTH_LIB__',synth_config.library.synthetic)
     replace_in_file(top_cons,'__TOP__',path.top)
+    replace_in_file(top_cons,'__TARGET_LIB__',synth_config.library.target)
+    replace_in_file(top_cons,'__RTL_LIST__',path.rtl_list)
+    replace_in_file(top_cons,'__PARAMETER__',path.param)
+    replace_in_file(top_cons,'__TARGET_LIB__',synth_config.library.target)
+    replace_in_file(top_cons,'__LIB_NAME__',synth_config.signal_driving_cell.lib)
+    replace_in_file(top_cons,'__WIRE_LOAD_MODEL__',synth_config.wire_load_model)
+    replace_in_file(top_cons,'__DRIVE_CELL__',synth_config.signal_driving_cell.name)
+    replace_in_file(top_cons,'__DRIVE_PIN__',synth_config.signal_driving_cell.output)
+    replace_in_file(top_cons,'__OPERA_CONDITION__',synth_config.opera_condition)
+
+
+
+
 
     cons = ""
     #cons += f"\n{synth_config.path}"
@@ -430,11 +468,13 @@ def main(filename):
     #print(pt_config)
     #print(synth_config)
     #print(clock_list)
-    
+    with open(os.path.join(path.cons_path,path.top+"_clk.tcl"),"w",encoding="utf-8")as f:
+        f.write(cons_clk)
+    with open(os.path.join(path.cons_path,path.top+"_rst.tcl"),"w",encoding="utf-8")as f:
+        f.write(cons_rst)
+    with open(os.path.join(path.cons_path,path.top+"_io.tcl"),"w",encoding="utf-8")as f:
+        f.write(cons_io)
 
-    cons += cons_clk
-    cons += cons_rst
-    cons += cons_io
     #print (cons)
 
     

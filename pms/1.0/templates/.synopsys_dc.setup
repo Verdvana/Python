@@ -4,7 +4,7 @@ echo "***********************************************************"
 
 set SYN_ROOT_PATH				__ROOT__
 set PDK_PATH					__LIB_PATH__
-set RTL_PATH					$SYN_ROOT_PATH/../*/design/rtl  
+set RTL_PATH					[  list 	__RTL_PATH__]
 set CONFIG_PATH					$SYN_ROOT_PATH/synthesis/config
 set SCRIPT_PATH					$SYN_ROOT_PATH/synthesis/scirpts
 set MAPPED_PATH					$SYN_ROOT_PATH/synthesis/mapped
