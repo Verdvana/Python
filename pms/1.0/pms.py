@@ -390,7 +390,8 @@ def gen_cons_clk(clock_dict):
                 else:
                     generated_period = clock_dict[name]['period']
                 cons += f"\ncreate_generated_clock -name {name} {generated_period} -source {mst_source} [get_{pin_or_port} {clock_dict[name]['root']}]" 
-    
+    all_clocks = " ".join(clock_dict.keys())
+    cons += f"set ALL_CLOCKS "
     return cons
 
 
