@@ -165,6 +165,7 @@ def parse_path(sheet):
         sub_path = get_env_var(row[0],row[1])
         sub_sheet = openpyxl.load_workbook(os.path.join(sub_path,"pms",row[0]+".xlsx"))['path']
         sub_rtl_path = sub_sheet['B3'].value
+        
         sub_rtl_path = re.sub(r"\$\{top_path\}",sub_path,sub_rtl_path,flags=re.IGNORECASE)
 
         print(f"sub_rtl_path:{sub_rtl_path}")
