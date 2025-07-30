@@ -59,6 +59,16 @@ set		uniquify_naming_style   “%s_%d”
 write	-f  ddc -hierarchy  -output ${UNMAPPED_PATH}/${TOP_MODULE}.ddc
 
 #===================================================
+# 时钟约束
+#===================================================
+__CLOCKS_CONSTRAINT__
+
+#===================================================
+# 复位约束
+#===================================================
+__RESET_CONSTRAINT__
+
+#===================================================
 # 输入延迟设置
 #===================================================
 
@@ -74,9 +84,9 @@ set     INPUT_DELAY         [expr   $CLK_PERIOD*0.6]
 set     INPUT_TRANSITION    [expr   0.12]
 
 #===================================================
-# 运行约束
+# IO约束
 #===================================================
-source	__CONSTRAINT__
+__IO_CONSTRAINT__
 
 # 输出端口插入隔离单元，这里是插入缓存单
 set_isolate_ports   -type   buffer                      [all_outputs]
@@ -102,6 +112,26 @@ set_wire_load_model     -name           $WIRE_LOAD_MODEL \
 #===================================================
 
 set_max_area            650000
+
+#===================================================
+# 設置分組
+#===================================================
+
+# 設置critical_range，通常不能超過時鐘週期的10%
+set     CRITICAL_RANGE      [expr   $CLK_PERIOD*0.1]
+# 設置權重，默认为1
+set     WEIGHT              5
+
+# 時鐘分組（reg2reg）
+group_path      -name       $CLK_NAME   -weight	$WEIGHT               			 -critical_range $CRITICAL_RANGE
+# 輸入路徑（包含輸入路徑中的組合電路）分組
+group_path      -name       INPUTS      -from	[all_inputs]    			         -critical_range $CRITICAL_RANGE
+# 輸出路徑（包含輸出路徑中的組合電路）分組
+group_path      -name       OUTPUTS     -to	[all_outputs]   			         -critical_range $CRITICAL_RANGE
+# 輸入與輸出路徑上的組合電路分組
+group_path      -name       COMB        -from	[all_inputs]    -to	[all_outputs]    -critical_range $CRITICAL_RANGE
+# 報告分組情況
+#report_path_group
 
 
 #===================================================

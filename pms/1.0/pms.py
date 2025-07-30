@@ -348,7 +348,7 @@ def gen_cms_cons_synth(synth_config,path):
     
     print(cons)
 
-def gen_cms_cons_clk(clock_dict):
+def gen_cons_clk(clock_dict):
     cons = "\n#========================================\n#Clock Constraint"
     if not clock_dict:
         print("No clock data found.")
@@ -358,7 +358,7 @@ def gen_cms_cons_clk(clock_dict):
     print("-"*20)
 
     for name,row_data in clock_dict.items():
-        
+        cons += f"\n#Clock {name} - {row_data['comment']}"
         if clock_dict[name]['root'] is None:
             cons += f"\ncreate_clock -name {name} -period {clock_dict[name]['period']}"
         else:
@@ -394,7 +394,7 @@ def gen_cms_cons_clk(clock_dict):
     return cons
 
 
-def gen_cms_cons_rst(rst_dict,clock_dict):
+def gen_cons_rst(rst_dict,clock_dict):
     cons = "\n#========================================\n#Reset Constraint"
     if not rst_dict:
         print("No Reset data found.")
@@ -410,7 +410,7 @@ def gen_cms_cons_rst(rst_dict,clock_dict):
     
     return cons
 
-def gen_cms_cons_io(io_dict,clock_dict):
+def gen_cons_io(io_dict,clock_dict):
     cons = "\n#========================================\n#IO Constraint"
     if not io_dict:
         print("No IO data found.")
@@ -458,14 +458,14 @@ def main(filename):
     if 'clock' in wb.sheetnames:
         clock_dict = parse_clock(wb['clock'])
         #print (clock_list)
-        cons_clk = gen_cms_cons_clk(clock_dict)
+        cons_clk = gen_cons_clk(clock_dict)
     if 'reset' in wb.sheetnames:
         rst_dict = parse_rst(wb['reset'])
-        cons_rst = gen_cms_cons_rst(rst_dict,clock_dict)
+        cons_rst = gen_cons_rst(rst_dict,clock_dict)
     if 'io' in wb.sheetnames:
         io_dict = parse_io(wb['io'])
         #print (io_list)
-        cons_io = gen_cms_cons_io(io_dict,clock_dict)
+        cons_io = gen_cons_io(io_dict,clock_dict)
     #print(pt_config)
     #print(synth_config)
     #print(clock_list)
