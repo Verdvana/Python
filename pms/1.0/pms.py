@@ -6,6 +6,7 @@ import openpyxl
 import shutil
 from dataclasses import dataclass,field
 from pathlib import Path
+from datetime import datetime
 
 #============================================================
 # Define data class
@@ -298,6 +299,7 @@ def gen_cms_cons_pt(pt_config):
     cons = ""
 
 def gen_cms_cons_synth(synth_config,path):
+    date=datetime.now().strftime("%Y-%m-%d")
     synth_config.path_root = path.top_path + "/" + synth_config.path_root 
     script_dir=os.path.dirname(os.path.abspath(__file__))
     synth_cons_temp = script_dir + "/templates/syth.tcl"
@@ -327,6 +329,7 @@ def gen_cms_cons_synth(synth_config,path):
     replace_in_file(synopsys_setup,'__LINK_LIB__',synth_config.library.link)
     replace_in_file(synopsys_setup,'__SYMBOL_LIB__',synth_config.library.symbol)
     replace_in_file(synopsys_setup,'__SYNTH_LIB__',synth_config.library.synthetic)
+    replace_in_file(top_cons,'__DATE__',date)
     replace_in_file(top_cons,'__TOP__',path.top)
     replace_in_file(top_cons,'__TARGET_LIB__',synth_config.library.target)
     replace_in_file(top_cons,'__RTL_LIST__',path.rtl_list)
@@ -390,8 +393,8 @@ def gen_cons_clk(clock_dict):
                 else:
                     generated_period = clock_dict[name]['period']
                 cons += f"\ncreate_generated_clock -name {name} {generated_period} -source {mst_source} [get_{pin_or_port} {clock_dict[name]['root']}]" 
-    all_clocks = " ".join(clock_dict.keys())
-    cons += f"set ALL_CLOCKS "
+    cons += f"\n#----------------------------------------\n#Set var"
+
     return cons
 
 
@@ -412,6 +415,8 @@ def gen_cons_rst(rst_dict,clock_dict):
     return cons
 
 def gen_cons_io(io_dict,clock_dict):
+    input_ports_except_clk = ""
+    output_ports_except_clk = ""
     cons = "\n#========================================\n#IO Constraint"
     if not io_dict:
         print("No IO data found.")
@@ -422,6 +427,7 @@ def gen_cons_io(io_dict,clock_dict):
     #for row in enumerate(clock_list,start=1):
     for pin,row_data in io_dict.items():
         if io_dict[pin]['direction'] in ("input","in"):
+            input_ports_except_clk += f" {pin}"
             if io_dict[pin]['delay_min'] is not None:
                 delay = clock_dict[io_dict[pin]['clock']]['period'] * io_dict[pin]['delay_min']
                 cons += f"\nset_input_delay -clock {io_dict[pin]['clock']} -min {delay} [get_ports {pin}]"
@@ -429,6 +435,7 @@ def gen_cons_io(io_dict,clock_dict):
                 delay = clock_dict[io_dict[pin]['clock']]['period'] * io_dict[pin]['delay_max']
                 cons += f"\nset_input_delay -clock {io_dict[pin]['clock']} -max {delay} [get_ports {pin}]"
         elif io_dict[pin]['direction'] in ("output","out"):
+            output_ports_except_clk += f" {pin}"
             if io_dict[pin]['delay_min'] is not None:
                 delay = clock_dict[io_dict[pin]['clock']]['period'] * io_dict[pin]['delay_min']
                 cons += f"\nset_output_delay -clock {io_dict[pin]['clock']} -min {delay} [get_ports {pin}]"
@@ -441,6 +448,15 @@ def gen_cons_io(io_dict,clock_dict):
             if io_dict[pin]['load_max'] is not None:
                 load = io_dict[pin]['load_max']
                 cons += f"\nset_load -max {load} [get_ports {pin}]"
+    cons += "\n#----------------------------------------\n#Set var"
+    cons += f"\nset NON_CLK_INPUT_PORTS [get_ports -quiet \"{input_ports_except_clk}\"]"
+    cons += f"\nset NON_CLK_OUTPUT_PORTS [get_ports -quiet \"{output_ports_except_clk}\"]"
+    cons += "\n#----------------------------------------\n#Set input"
+    cons += "\nset_driving_cell -lib_cell ${DRIVE_CELL} -pin ${DRIVE_PIN} ${NON_CLK_INPUT_PORTS}"
+    cons += "\n#----------------------------------------\n#Set output"
+    cons += "\n"
+    cons += "\n#----------------------------------------\n#Set false path"
+    cons += "\nset_false_path -from ${NON_CLK_INPUT_PORTS} -thr ${NON_CLK_OUTPUT_PORTS}"
     return cons
 
 def main(filename):

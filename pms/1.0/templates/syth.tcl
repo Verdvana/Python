@@ -27,10 +27,10 @@ set TOP_MODULE		__TOP__			;# 定义顶层文件名
 #read_sverilog	-rtl	[list	__RTL_LIST__    ]
 
 # 检查link
-#if {[link] == 0} {
-#	echo "Link Error!";
-#	exit;
-#}
+if {[link] == 0} {
+	echo "Link Error!";
+	exit;
+}
 
 analyze		-f	sverilog	[list	__RTL_LIST__  ]
 elaborate	$TOP_MODULE	-parameter	" __PARAMETER__  "
