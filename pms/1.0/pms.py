@@ -410,7 +410,9 @@ def gen_cms_cons_synth(synth_config,path):
 
 def gen_cons_clk(clock_dict):
     cons = "\n#========================================"
-    cons += f"\nset "
+    cons += f"\nSet uncertainty"
+    cons += "\narray set clk_uncertainty {"
+    cons += f"\n    sm.uncertaity    ct_budget(sm.skew)"
     cons += "\n#========================================\n#Clock Constraint"
     if not clock_dict:
         print("No clock data found.")
