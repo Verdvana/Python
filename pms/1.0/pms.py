@@ -46,6 +46,12 @@ class ClockTree:
     skew:str="None"
     noise:str="None"
 @dataclass
+class Scale:
+    sm:ClockTree=field(default_factory=ClockTree)
+    md:ClockTree=field(default_factory=ClockTree)
+    lg:ClockTree=field(default_factory=ClockTree)
+    raw:ClockTree=field(default_factory=ClockTree)
+@dataclass
 class Config:
     path_root:str="None"
     path_sub:str="None"
@@ -62,10 +68,7 @@ class Config:
     opera_condition:str="None"
     setup_margin:str="None"
     hold_margin:str="None"
-    sm_ct:ClockTree=field(default_factory=ClockTree)
-    md_ct:ClockTree=field(default_factory=ClockTree)
-    lg_ct:ClockTree=field(default_factory=ClockTree)
-    raw_ct:ClockTree=field(default_factory=ClockTree)
+    ct:Scale=field(default_factory=Scale)
 
 def replace_in_file(file_path,target,replacement):
     if replacement is None:
@@ -173,6 +176,24 @@ def parse_path(sheet):
         path.sub_rtl_list += f" {sub_rtl_path}"
         row_index += 1
 
+    if os.path.exists(path.cons_path):
+        user_input = input(f"Warning: DIR {path.cons_path} existed, do you want to clean it and continue?(y/n):").strip().lower()
+        if user_input == "y":
+            shutil.rmtree(path.cons_path)
+        elif user_input == "n":
+            error_exit("User terminal script.")
+        else:
+            error_exit("Input error.")
+    os.makedirs(path.cons_path)
+    if os.path.exists(path.tb_path):
+        user_input = input(f"Warning: DIR {path.tb_path} existed, do you want to clean it and continue?(y/n):").strip().lower()
+        if user_input == "y":
+            shutil.rmtree(path.tb_path)
+        elif user_input == "n":
+            error_exit("User terminal script.")
+        else:
+            error_exit("Input error.")
+    os.makedirs(path.tb_path)
 
     return path
 
@@ -208,38 +229,38 @@ def parse_config(sheet,path):
     config.opera_condition              = sheet['F15'].value
     config.setup_margin                 = sheet['B19'].value
     config.hold_margin                  = sheet['B20'].value
-    config.sm_ct.source_latency.min     = sheet['B25'].value
-    config.sm_ct.source_latency.max     = sheet['C25'].value
-    config.sm_ct.network_latency.min    = sheet['D25'].value
-    config.sm_ct.network_latency.max    = sheet['E25'].value
-    config.sm_ct.trans.min              = sheet['F25'].value
-    config.sm_ct.trans.max              = sheet['G25'].value
-    config.sm_ct.skew                   = sheet['H25'].value
-    config.sm_ct.noise                  = sheet['I25'].value
-    config.md_ct.source_latency.min     = sheet['B26'].value
-    config.md_ct.source_latency.max     = sheet['C26'].value
-    config.md_ct.network_latency.min    = sheet['D26'].value
-    config.md_ct.network_latency.max    = sheet['E26'].value
-    config.md_ct.trans.min              = sheet['F26'].value
-    config.md_ct.trans.max              = sheet['G26'].value
-    config.md_ct.skew                   = sheet['H26'].value
-    config.md_ct.noise                  = sheet['I26'].value
-    config.lg_ct.source_latency.min     = sheet['B27'].value
-    config.lg_ct.source_latency.max     = sheet['C27'].value
-    config.lg_ct.network_latency.min    = sheet['D27'].value
-    config.lg_ct.network_latency.max    = sheet['E27'].value
-    config.lg_ct.trans.min              = sheet['F27'].value
-    config.lg_ct.trans.max              = sheet['G27'].value
-    config.lg_ct.skew                   = sheet['H27'].value
-    config.lg_ct.noise                  = sheet['I27'].value
-    config.raw_ct.source_latency.min    = sheet['B28'].value
-    config.raw_ct.source_latency.max    = sheet['C28'].value
-    config.raw_ct.network_latency.min   = sheet['D28'].value
-    config.raw_ct.network_latency.max   = sheet['E28'].value
-    config.raw_ct.trans.min             = sheet['F28'].value
-    config.raw_ct.trans.max             = sheet['G28'].value
-    config.raw_ct.skew                  = sheet['H28'].value
-    config.raw_ct.noise                 = sheet['I28'].value
+    config.ct.sm.source_latency.min     = sheet['B25'].value
+    config.ct.sm.source_latency.max     = sheet['C25'].value
+    config.ct.sm.network_latency.min    = sheet['D25'].value
+    config.ct.sm.network_latency.max    = sheet['E25'].value
+    config.ct.sm.trans.min              = sheet['F25'].value
+    config.ct.sm.trans.max              = sheet['G25'].value
+    config.ct.sm.skew                   = sheet['H25'].value
+    config.ct.sm.noise                  = sheet['I25'].value
+    config.ct.md.source_latency.min     = sheet['B26'].value
+    config.ct.md.source_latency.max     = sheet['C26'].value
+    config.ct.md.network_latency.min    = sheet['D26'].value
+    config.ct.md.network_latency.max    = sheet['E26'].value
+    config.ct.md.trans.min              = sheet['F26'].value
+    config.ct.md.trans.max              = sheet['G26'].value
+    config.ct.md.skew                   = sheet['H26'].value
+    config.ct.md.noise                  = sheet['I26'].value
+    config.ct.lg.source_latency.min     = sheet['B27'].value
+    config.ct.lg.source_latency.max     = sheet['C27'].value
+    config.ct.lg.network_latency.min    = sheet['D27'].value
+    config.ct.lg.network_latency.max    = sheet['E27'].value
+    config.ct.lg.trans.min              = sheet['F27'].value
+    config.ct.lg.trans.max              = sheet['G27'].value
+    config.ct.lg.skew                   = sheet['H27'].value
+    config.ct.lg.noise                  = sheet['I27'].value
+    config.ct.raw.source_latency.min    = sheet['B28'].value
+    config.ct.raw.source_latency.max    = sheet['C28'].value
+    config.ct.raw.network_latency.min   = sheet['D28'].value
+    config.ct.raw.network_latency.max   = sheet['E28'].value
+    config.ct.raw.trans.min             = sheet['F28'].value
+    config.ct.raw.trans.max             = sheet['G28'].value
+    config.ct.raw.skew                  = sheet['H28'].value
+    config.ct.raw.noise                 = sheet['I28'].value
 
     if config.library.target is None or str(config.library.target).strip() == "":
         error_exit("Not define target library")
@@ -322,6 +343,41 @@ def gen_cms_cons_synth(synth_config,path):
     shutil.copy(synth_cons_temp,top_cons)
     shutil.copy(synopsys_setup_temp,synopsys_setup)
 
+    budget = "array set ct_budget {"
+    budget += f"\n    sm.source_latency.min    {synth_config.ct.sm.source_latency.min}"
+    budget += f"\n    sm.source_latency.max    {synth_config.ct.sm.source_latency.max}"
+    budget += f"\n    sm.network_latency.min   {synth_config.ct.sm.network_latency.min}"
+    budget += f"\n    sm.network_latency.max   {synth_config.ct.sm.network_latency.max}"
+    budget += f"\n    sm.trans.min             {synth_config.ct.sm.trans.min}"
+    budget += f"\n    sm.trans.max             {synth_config.ct.sm.trans.max}"
+    budget += f"\n    sm.skew                  {synth_config.ct.sm.skew}"
+    budget += f"\n    sm.noise                 {synth_config.ct.sm.noise}"
+    budget += f"\n    md.source_latency.min    {synth_config.ct.md.source_latency.min}"
+    budget += f"\n    md.source_latency.max    {synth_config.ct.md.source_latency.max}"
+    budget += f"\n    md.network_latency.min   {synth_config.ct.md.network_latency.min}"
+    budget += f"\n    md.network_latency.max   {synth_config.ct.md.network_latency.max}"
+    budget += f"\n    md.trans.min             {synth_config.ct.md.trans.min}"
+    budget += f"\n    md.trans.max             {synth_config.ct.md.trans.max}"
+    budget += f"\n    md.skew                  {synth_config.ct.md.skew}"
+    budget += f"\n    md.noise                 {synth_config.ct.md.noise}"
+    budget += f"\n    lg.source_latency.min    {synth_config.ct.lg.source_latency.min}"
+    budget += f"\n    lg.source_latency.max    {synth_config.ct.lg.source_latency.max}"
+    budget += f"\n    lg.network_latency.min   {synth_config.ct.lg.network_latency.min}"
+    budget += f"\n    lg.network_latency.max   {synth_config.ct.lg.network_latency.max}"
+    budget += f"\n    lg.trans.min             {synth_config.ct.lg.trans.min}"
+    budget += f"\n    lg.trans.max             {synth_config.ct.lg.trans.max}"
+    budget += f"\n    lg.skew                  {synth_config.ct.lg.skew}"
+    budget += f"\n    lg.noise                 {synth_config.ct.lg.noise}"
+    budget += f"\n    raw.source_latency.min   {synth_config.ct.raw.source_latency.min}"
+    budget += f"\n    raw.source_latency.max   {synth_config.ct.raw.source_latency.max}"
+    budget += f"\n    raw.network_latency.min  {synth_config.ct.raw.network_latency.min}"
+    budget += f"\n    raw.network_latency.max  {synth_config.ct.raw.network_latency.max}"
+    budget += f"\n    raw.trans.min            {synth_config.ct.raw.trans.min}"
+    budget += f"\n    raw.trans.max            {synth_config.ct.raw.trans.max}"
+    budget += f"\n    raw.skew                 {synth_config.ct.raw.skew}"
+    budget += f"\n    raw.noise                {synth_config.ct.raw.noise}"
+    budget += "\n}"
+
     replace_in_file(synopsys_setup,'__ROOT__',path.top_path)
     replace_in_file(synopsys_setup,'__LIB_PATH__',path.lib_path)
     replace_in_file(synopsys_setup,'__RTL_PATH__',path.rtl_path+path.sub_rtl_list)
@@ -340,10 +396,11 @@ def gen_cms_cons_synth(synth_config,path):
     replace_in_file(top_cons,'__DRIVE_CELL__',synth_config.signal_driving_cell.name)
     replace_in_file(top_cons,'__DRIVE_PIN__',synth_config.signal_driving_cell.output)
     replace_in_file(top_cons,'__OPERA_CONDITION__',synth_config.opera_condition)
+    replace_in_file(top_cons,'__CLOCK_TREE__BUDGET__',budget)
 
-
-
-
+    replace_in_file(top_cons,'__CLOCKS_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_clk.tcl"))
+    replace_in_file(top_cons,'__RESET_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_rst.tcl"))
+    replace_in_file(top_cons,'__IO_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_io.tcl"))
 
     cons = ""
     #cons += f"\n{synth_config.path}"
@@ -352,7 +409,9 @@ def gen_cms_cons_synth(synth_config,path):
     print(cons)
 
 def gen_cons_clk(clock_dict):
-    cons = "\n#========================================\n#Clock Constraint"
+    cons = "\n#========================================"
+    cons += f"\nset "
+    cons += "\n#========================================\n#Clock Constraint"
     if not clock_dict:
         print("No clock data found.")
         return
@@ -374,7 +433,7 @@ def gen_cons_clk(clock_dict):
                 cons += f"\ncreate_clock -name {name} -period {clock_dict[name]['period']} [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_ideal_network [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_dont_touch_network [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_drive [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_drive 0 [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_clock_uncertaity  -setup $CLK_SKEW [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_clock_transition  -max $CLK_TRAN [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_clock_latency -source -max $CLK_SRC_LATENCY [get_{pin_or_port} {clock_dict[name]['root']}]"
@@ -411,6 +470,7 @@ def gen_cons_rst(rst_dict,clock_dict):
         cons += f"\nset_ideal_network [get_port {reset}]"
         cons += f"\nset_dont_touch_network [get_port {reset}]"
         cons += f"\nset_drive 0 [get_port {reset}]"
+        cons += f"\nset_false_path -from [get_port {reset}]"
     
     return cons
 

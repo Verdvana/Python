@@ -59,14 +59,20 @@ set		uniquify_naming_style   “%s_%d”
 write	-f  ddc -hierarchy  -output ${UNMAPPED_PATH}/${TOP_MODULE}.ddc
 
 #===================================================
+# Budget of clock tree
+#===================================================
+
+__CLOCK_TREE__BUDGET__
+
+#===================================================
 # 时钟约束
 #===================================================
-__CLOCKS_CONSTRAINT__
+source __CLOCKS_CONSTRAINT__
 
 #===================================================
 # 复位约束
 #===================================================
-__RESET_CONSTRAINT__
+source __RESET_CONSTRAINT__
 
 #===================================================
 # 输入延迟设置
@@ -79,17 +85,24 @@ set     WIRE_LOAD_MODEL     __WIRE_LOAD_MODEL__
 set     DRIVE_CELL          __DRIVE_CELL__
 set     DRIVE_PIN           __DRIVE_PIN__
 set     OPERA_CONDITION     __OPERA_CONDITION__
-set     ALL_IN_EXCEPT_CLK   [remove_from_collection [all_inputs] [get_ports $CLK_NAME]]
-set     INPUT_DELAY         [expr   $CLK_PERIOD*0.6]
-set     INPUT_TRANSITION    [expr   0.12]
+#set     ALL_IN_EXCEPT_CLK   [remove_from_collection [all_inputs] [get_ports $CLK_NAME]]
+#set     INPUT_DELAY         [expr   $CLK_PERIOD*0.6]
+#set     INPUT_TRANSITION    [expr   0.12]
 
 #===================================================
 # IO约束
 #===================================================
-__IO_CONSTRAINT__
+source __IO_CONSTRAINT__
 
 # 输出端口插入隔离单元，这里是插入缓存单
 set_isolate_ports   -type   buffer                      [all_outputs]
+
+#===================================================
+# 设置组合电路最大延迟
+#===================================================
+
+#set_input_delay     [expr   $CLK_PERIOD*0.1]    -clock  $CLK_NAME   -add_delay  [get_ports a_i]
+#set_output_delay    [expr   $CLK_PERIOD*0.1]    -clock  $CLK_NAME   -add_delay  [get_ports y_o]
 
 
 #===================================================
@@ -112,6 +125,14 @@ set_wire_load_model     -name           $WIRE_LOAD_MODEL \
 #===================================================
 
 set_max_area            650000
+
+#===================================================
+# DRC約束
+#===================================================
+
+# 宏定義
+#set     MAX_CAPACITANCE     [expr [load_of $LIB_NAME/NAND4X2/Y] *5]
+#set_max_capacitance         $MAX_CAPACITANCE    $ALL_IN_EXCEPT_CLK
 
 #===================================================
 # 設置分組
@@ -163,11 +184,6 @@ set_fix_multiple_port_nets  -all                        -buffer_constants
 #set_multicycle_path     -setup  6   -from   FFA/CP  -through    ADD/out     -to     FFB/D
 #set_multicycle_path     -hold   5   -from   FFA/CP  -through    ADD/out     -to     FFB/D
 #set_multicycle_path     -to     [get_pins q_lac*/D]
-
-#===================================================
-# 检查时序
-#===================================================
-check_timing
 
 
 #===================================================
