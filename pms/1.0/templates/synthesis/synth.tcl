@@ -26,18 +26,17 @@ set TOP_MODULE		__TOP__			;# 定义顶层文件名
 # 读文件
 #read_sverilog	-rtl	[list	__RTL_LIST__    ]
 
-# 检查link
-if {[link] == 0} {
-	echo "Link Error!";
-	exit;
-}
-
 analyze		-f	sverilog	[list	__RTL_LIST__  ]
 elaborate	$TOP_MODULE	-parameter	" __PARAMETER__  "
 
 #设置顶层文件
 current_design	$TOP_MODULE
 
+# 检查link
+if {[link] == 0} {
+	echo "Link Error!";
+	exit;
+}
 
 # 检查语法
 if {[check_design] == 0} {
@@ -58,10 +57,10 @@ uniquify;			#把例化的多个模块转化成唯一的模块名字
 set		uniquify_naming_style   “%s_%d”
 write	-f  ddc -hierarchy  -output ${UNMAPPED_PATH}/${TOP_MODULE}.ddc
 
+
 #===================================================
 # Budget of clock tree
 #===================================================
-
 __CLOCK_TREE__BUDGET__
 
 #===================================================
@@ -139,20 +138,25 @@ set_max_area            650000
 #===================================================
 
 # 設置critical_range，通常不能超過時鐘週期的10%
-set     CRITICAL_RANGE      [expr   $CLK_PERIOD*0.1]
+#set     CRITICAL_RANGE      [expr   $CLK_PERIOD*0.1]
 # 設置權重，默认为1
-set     WEIGHT              5
+#set     WEIGHT              5
 
 # 時鐘分組（reg2reg）
-group_path      -name       $CLK_NAME   -weight	$WEIGHT               			 -critical_range $CRITICAL_RANGE
+#group_path      -name       $CLK_NAME   -weight	$WEIGHT               			 -critical_range $CRITICAL_RANGE
 # 輸入路徑（包含輸入路徑中的組合電路）分組
-group_path      -name       INPUTS      -from	[all_inputs]    			         -critical_range $CRITICAL_RANGE
+#group_path      -name       INPUTS      -from	[all_inputs]    			         -critical_range $CRITICAL_RANGE
 # 輸出路徑（包含輸出路徑中的組合電路）分組
-group_path      -name       OUTPUTS     -to	[all_outputs]   			         -critical_range $CRITICAL_RANGE
+#group_path      -name       OUTPUTS     -to	[all_outputs]   			         -critical_range $CRITICAL_RANGE
 # 輸入與輸出路徑上的組合電路分組
-group_path      -name       COMB        -from	[all_inputs]    -to	[all_outputs]    -critical_range $CRITICAL_RANGE
+#group_path      -name       COMB        -from	[all_inputs]    -to	[all_outputs]    -critical_range $CRITICAL_RANGE
 # 報告分組情況
 #report_path_group
+
+group_path  -name   reg2reg     -from   [all_registers] -to [all_registers] -weight 20
+group_path  -name   in2reg      -from   [all_inputs]    -to [all_registers]   
+group_path  -name   reg2out     -from   [all_registers] -to [all_outputs]
+group_path  -name   in2out      -from   [all_inputs]    -to [all_outputs]
 
 
 #===================================================

@@ -323,12 +323,14 @@ def gen_cms_cons_synth(synth_config,path):
     date=datetime.now().strftime("%Y-%m-%d")
     synth_config.path_root = path.top_path + "/" + synth_config.path_root 
     script_dir=os.path.dirname(os.path.abspath(__file__))
-    synth_cons_temp = script_dir + "/templates/syth.tcl"
-    synopsys_setup_temp = script_dir + "/templates/.synopsys_dc.setup"
+    synth_cons_temp = script_dir + "/templates/synthesis/synth.tcl"
+    synopsys_setup_temp = script_dir + "/templates/synthesis/.synopsys_dc.setup"
+    makefile_temp = script_dir + "/templates/synthesis/Makefile"
     sub_dir = synth_config.path_sub.split()
 
     top_cons = synth_config.path_root + "/scripts/" + path.top + ".tcl"
     synopsys_setup = synth_config.path_root+"/work/.synopsys_dc.setup"
+    makefile = synth_config.path_root+"/Makefile"
     if os.path.exists(synth_config.path_root):
         user_input = input(f"Warning: DIR {synth_config.path_root} existed, do you want to clean it and continue?(y/n):").strip().lower()
         if user_input == "y":
@@ -342,6 +344,7 @@ def gen_cms_cons_synth(synth_config,path):
         os.makedirs(new_dir)
     shutil.copy(synth_cons_temp,top_cons)
     shutil.copy(synopsys_setup_temp,synopsys_setup)
+    shutil.copy(makefile_temp,makefile)
 
     budget = "array set ct_budget {"
     budget += f"\n    sm.source_latency.min    {synth_config.ct.sm.source_latency.min}"
@@ -377,7 +380,11 @@ def gen_cms_cons_synth(synth_config,path):
     budget += f"\n    raw.skew                 {synth_config.ct.raw.skew}"
     budget += f"\n    raw.noise                {synth_config.ct.raw.noise}"
     budget += "\n}"
+    budget += f"\nset SETUP_MARGIN  {synth_config.setup_margin}"
+    budget += f"\nset HOLD_MARGIN   {synth_config.hold_margin}"
 
+
+    replace_in_file(makefile,'__SCRIPT__',top_cons)
     replace_in_file(synopsys_setup,'__ROOT__',path.top_path)
     replace_in_file(synopsys_setup,'__LIB_PATH__',path.lib_path)
     replace_in_file(synopsys_setup,'__RTL_PATH__',path.rtl_path+path.sub_rtl_list)
@@ -409,11 +416,7 @@ def gen_cms_cons_synth(synth_config,path):
     print(cons)
 
 def gen_cons_clk(clock_dict):
-    cons = "\n#========================================"
-    cons += f"\nSet uncertainty"
-    cons += "\narray set clk_uncertainty {"
-    cons += f"\n    sm.uncertaity    ct_budget(sm.skew)"
-    cons += "\n#========================================\n#Clock Constraint"
+    cons = "\n#========================================\n#Clock Constraint"
     if not clock_dict:
         print("No clock data found.")
         return
@@ -432,14 +435,21 @@ def gen_cons_clk(clock_dict):
                 pin_or_port = "ports"
             
             if clock_dict[name]['master'] is None:
+                cons += f"\nset JITTER [expr {clock_dict[name]['jsrc']} + {clock_dict[name]['jmn']} + {clock_dict[name]['jdc']}]"
+                cons += f"\nset SETUP_UNCERTAINTY [expr $ct_budget({clock_dict[name]['type']}.skew) + $ct_budget({clock_dict[name]['type']}.noise) + $JITTER + ({clock_dict[name]['period']} - $ct_budget({clock_dict[name]['type']}.skew) - $ct_budget({clock_dict[name]['type']}.noise) - $JITTER) * $SETUP_MARGIN]"
+                cons += f"\nset HOLD_UNCERTAINTY [expr $ct_budget({clock_dict[name]['type']}.skew) + $ct_budget({clock_dict[name]['type']}.noise) + $HOLD_MARGIN]"
                 cons += f"\ncreate_clock -name {name} -period {clock_dict[name]['period']} [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_ideal_network [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_dont_touch_network [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_drive 0 [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_uncertaity  -setup $CLK_SKEW [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_transition  -max $CLK_TRAN [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_latency -source -max $CLK_SRC_LATENCY [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_latency -max $CLK_LATENCY [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_uncertainty  -setup $SETUP_UNCERTAINTY [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_uncertainty  -hold $HOLD_UNCERTAINTY [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_transition  -max $ct_budget({clock_dict[name]['type']}.trans.max) [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_transition  -min $ct_budget({clock_dict[name]['type']}.trans.min) [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_latency -source -max $ct_budget({clock_dict[name]['type']}.source_latency.max) [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_latency -source -min $ct_budget({clock_dict[name]['type']}.source_latency.min) [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_latency -max $ct_budget({clock_dict[name]['type']}.network_latency.max) [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_latency -min $ct_budget({clock_dict[name]['type']}.network_latency.min) [get_{pin_or_port} {clock_dict[name]['root']}]"
             else:
                 #mst_clk = 
                 mst_source = clock_dict[clock_dict[name]['master']]['root']

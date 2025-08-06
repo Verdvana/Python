@@ -8,7 +8,7 @@ set RTL_PATH					[  list 	__RTL_PATH__]
 set CONFIG_PATH					$SYN_ROOT_PATH/synthesis/config
 set SCRIPT_PATH					$SYN_ROOT_PATH/synthesis/scirpts
 set MAPPED_PATH					$SYN_ROOT_PATH/synthesis/mapped
-set REPORT_PATH					$SYN_ROOT_PATH/synthesis/report
+set REPORT_PATH					$SYN_ROOT_PATH/synthesis/reports
 set UNMAPPED_PATH				$SYN_ROOT_PATH/synthesis/unmapped
 set SPRAM_PATH					$SYN_ROOT_PATH/design/memory/spram
 set DPRAM_PATH					$SYN_ROOT_PATH/design/memory/dpram
