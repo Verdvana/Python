@@ -22,6 +22,7 @@ class Path:
     param:str="None"
     lib_path:str="None"
     sub_rtl_list:str="None"
+    sub_path_list:str="None"
 @dataclass
 class Range:
     min:str="None"
@@ -92,6 +93,15 @@ def get_env_var(var,bak):
         return os.environ.get(var)
     else:
         return bak
+def get_rtl(path):
+    rtl_list = []
+    rtl_pattern = ["*.v", "*.sv", "*.vhd", "*.vhdl"]
+    for pattern in rtl_pattern:
+        rtl_list.extend(glob.glob(os.path.join(path, pattern)))
+    if not rtl_list:
+        error_exit(f"Not find RTL files in {path} with pattern {rtl_pattern}")
+    rtl_list = " ".join(os.path.basename(f) for f in rtl_list)
+    return rtl_list
 def parse_path(sheet):
     path=Path()
     path.top = sheet['B1'].value
@@ -106,14 +116,9 @@ def parse_path(sheet):
     path.rtl_path = sheet['B3'].value
     path.rtl_path = re.sub(r"\$\{top_path\}",path.top_path,path.rtl_path,flags=re.IGNORECASE)
     print(f"Top RTL dir: {path.rtl_path}")
-    rtl_pattern = ["*.v", "*.sv", "*.vhd", "*.vhdl"]
-    path.rtl_list = []
-    for pattern in rtl_pattern:
-        path.rtl_list.extend(glob.glob(os.path.join(path.rtl_path, pattern)))
-
-    if not path.rtl_list:
-        error_exit(f"Not find RTL files in {path.rtl_path} with pattern {rtl_pattern}")
-    path.rtl_list = " ".join(os.path.basename(f) for f in path.rtl_list)
+    
+    path.rtl_list = get_rtl(path.rtl_path)
+    
     print(f"RTL files found: {path.rtl_list}")
 
     top_pattern = path.top+"."
@@ -160,6 +165,7 @@ def parse_path(sheet):
     path.lib_path = sheet['B7'].value
     path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
 
+    path.sub_path_list = ""
     path.sub_rtl_list = ""
     row_index   = 10
     while True:
@@ -169,11 +175,11 @@ def parse_path(sheet):
         sub_path = get_env_var(row[0],row[1])
         sub_sheet = openpyxl.load_workbook(os.path.join(sub_path,"pms",row[0]+".xlsx"))['path']
         sub_rtl_path = sub_sheet['B3'].value
-        
         sub_rtl_path = re.sub(r"\$\{top_path\}",sub_path,sub_rtl_path,flags=re.IGNORECASE)
 
         print(f"sub_rtl_path:{sub_rtl_path}")
-        path.sub_rtl_list += f" {sub_rtl_path}"
+        path.sub_path_list += f" {sub_rtl_path}"
+        path.sub_rtl_list += " " + get_rtl(sub_rtl_path)
         row_index += 1
 
     if os.path.exists(path.cons_path):
@@ -316,10 +322,10 @@ def parse_io(sheet):
         row_index += 1
     return io_dict
 
-def gen_cms_cons_pt(pt_config):
+def gen_cons_pt(pt_config):
     cons = ""
 
-def gen_cms_cons_synth(synth_config,path):
+def gen_cons_synth(synth_config,path):
     date=datetime.now().strftime("%Y-%m-%d")
     synth_config.path_root = path.top_path + "/" + synth_config.path_root 
     script_dir=os.path.dirname(os.path.abspath(__file__))
@@ -385,9 +391,10 @@ def gen_cms_cons_synth(synth_config,path):
 
 
     replace_in_file(makefile,'__SCRIPT__',top_cons)
+
     replace_in_file(synopsys_setup,'__ROOT__',path.top_path)
     replace_in_file(synopsys_setup,'__LIB_PATH__',path.lib_path)
-    replace_in_file(synopsys_setup,'__RTL_PATH__',path.rtl_path+path.sub_rtl_list)
+    replace_in_file(synopsys_setup,'__RTL_PATH__',path.rtl_path+path.sub_path_list)
     replace_in_file(synopsys_setup,'__TARGET_LIB__',synth_config.library.target)
     replace_in_file(synopsys_setup,'__LINK_LIB__',synth_config.library.link)
     replace_in_file(synopsys_setup,'__SYMBOL_LIB__',synth_config.library.symbol)
@@ -395,13 +402,16 @@ def gen_cms_cons_synth(synth_config,path):
     replace_in_file(top_cons,'__DATE__',date)
     replace_in_file(top_cons,'__TOP__',path.top)
     replace_in_file(top_cons,'__TARGET_LIB__',synth_config.library.target)
-    replace_in_file(top_cons,'__RTL_LIST__',path.rtl_list)
+    replace_in_file(top_cons,'__RTL_LIST__',path.rtl_list+path.sub_rtl_list)
     replace_in_file(top_cons,'__PARAMETER__',path.param)
     replace_in_file(top_cons,'__TARGET_LIB__',synth_config.library.target)
-    replace_in_file(top_cons,'__LIB_NAME__',synth_config.signal_driving_cell.lib)
+    replace_in_file(top_cons,'__CLOCK_LIB_NAME__',synth_config.clock_driving_cell.lib)
+    replace_in_file(top_cons,'__CLOCK_DRIVE_CELL__',synth_config.clock_driving_cell.name)
+    replace_in_file(top_cons,'__CLOCK_DRIVE_PIN__',synth_config.clock_driving_cell.output)
+    replace_in_file(top_cons,'__SIGNAL_LIB_NAME__',synth_config.signal_driving_cell.lib)
+    replace_in_file(top_cons,'__SIGNAL_DRIVE_CELL__',synth_config.signal_driving_cell.name)
+    replace_in_file(top_cons,'__SIGNAL_DRIVE_PIN__',synth_config.signal_driving_cell.output)
     replace_in_file(top_cons,'__WIRE_LOAD_MODEL__',synth_config.wire_load_model)
-    replace_in_file(top_cons,'__DRIVE_CELL__',synth_config.signal_driving_cell.name)
-    replace_in_file(top_cons,'__DRIVE_PIN__',synth_config.signal_driving_cell.output)
     replace_in_file(top_cons,'__OPERA_CONDITION__',synth_config.opera_condition)
     replace_in_file(top_cons,'__CLOCK_TREE__BUDGET__',budget)
 
@@ -414,6 +424,14 @@ def gen_cms_cons_synth(synth_config,path):
 
     
     print(cons)
+def gen_tb(clock_dict,rst_dict,io_dict,path):
+    tb = "\n//========================================\n#The time unit and precision"
+    tb += "\n`timescale  1ns/1ps"
+    tb += f"\nmodule {path.top}_tb;"
+    tb += "\n//========================================"
+    tb += f"\n    parameter {path.param};"
+    print (tb)
+
 
 def gen_cons_clk(clock_dict):
     cons = "\n#========================================\n#Clock Constraint"
@@ -524,7 +542,7 @@ def gen_cons_io(io_dict,clock_dict):
     cons += f"\nset NON_CLK_INPUT_PORTS [get_ports -quiet \"{input_ports_except_clk}\"]"
     cons += f"\nset NON_CLK_OUTPUT_PORTS [get_ports -quiet \"{output_ports_except_clk}\"]"
     cons += "\n#----------------------------------------\n#Set input"
-    cons += "\nset_driving_cell -lib_cell ${DRIVE_CELL} -pin ${DRIVE_PIN} ${NON_CLK_INPUT_PORTS}"
+    cons += "\nset_driving_cell -lib_cell ${SIGNAL_DRIVE_CELL} -pin ${SIGNAL_DRIVE_PIN} -library ${SIGNAL_LIB_NAME} ${NON_CLK_INPUT_PORTS}"
     cons += "\n#----------------------------------------\n#Set output"
     cons += "\n"
     cons += "\n#----------------------------------------\n#Set false path"
@@ -539,10 +557,10 @@ def main(filename):
         path = parse_path(wb['path'])
     if 'pt' in wb.sheetnames:
         pt_config = parse_config(wb['pt'],path)
-        #cons_pt = gen_cms_cons_pt(pt_config,design)
+        #cons_pt = gen_cons_pt(pt_config,design)
     if 'synth' in wb.sheetnames:
         synth_config = parse_config(wb['synth'],path)
-        cons_synth = gen_cms_cons_synth(synth_config,path)
+        cons_synth = gen_cons_synth(synth_config,path)
 
     if 'clock' in wb.sheetnames:
         clock_dict = parse_clock(wb['clock'])
@@ -555,6 +573,8 @@ def main(filename):
         io_dict = parse_io(wb['io'])
         #print (io_list)
         cons_io = gen_cons_io(io_dict,clock_dict)
+    if 'sim' in wb.sheetnames:
+        gen_tb(clock_dict,rst_dict,io_dict,path)
     #print(pt_config)
     #print(synth_config)
     #print(clock_list)

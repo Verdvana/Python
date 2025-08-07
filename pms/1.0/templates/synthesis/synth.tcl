@@ -30,7 +30,7 @@ analyze		-f	sverilog	[list	__RTL_LIST__  ]
 elaborate	$TOP_MODULE	-parameter	" __PARAMETER__  "
 
 #设置顶层文件
-current_design	$TOP_MODULE
+#current_design	$TOP_MODULE
 
 # 检查link
 if {[link] == 0} {
@@ -64,6 +64,23 @@ write	-f  ddc -hierarchy  -output ${UNMAPPED_PATH}/${TOP_MODULE}.ddc
 __CLOCK_TREE__BUDGET__
 
 #===================================================
+# 约束设置
+#===================================================
+# 宏定义
+set     CLOCK_LIB_NAME      __CLOCK_LIB_NAME__
+set     CLOCK_DRIVE_CELL    __CLOCK_DRIVE_CELL__
+set     CLOCK_DRIVE_PIN     __CLOCK_DRIVE_PIN__
+set     SIGNAL_LIB_NAME     __SIGNAL_LIB_NAME__
+set     SIGNAL_DRIVE_CELL   __SIGNAL_DRIVE_CELL__
+set     SIGNAL_DRIVE_PIN    __SIGNAL_DRIVE_PIN__
+#set     WIRE_LOAD_MODEL     smic18_wl10
+set     WIRE_LOAD_MODEL     __WIRE_LOAD_MODEL__
+set     OPERA_CONDITION     __OPERA_CONDITION__
+#set     ALL_IN_EXCEPT_CLK   [remove_from_collection [all_inputs] [get_ports $CLK_NAME]]
+#set     INPUT_DELAY         [expr   $CLK_PERIOD*0.6]
+#set     INPUT_TRANSITION    [expr   0.12]
+
+#===================================================
 # 时钟约束
 #===================================================
 source __CLOCKS_CONSTRAINT__
@@ -72,21 +89,6 @@ source __CLOCKS_CONSTRAINT__
 # 复位约束
 #===================================================
 source __RESET_CONSTRAINT__
-
-#===================================================
-# 输入延迟设置
-#===================================================
-
-# 宏定义
-set     LIB_NAME            __LIB_NAME__
-#set     WIRE_LOAD_MODEL     smic18_wl10
-set     WIRE_LOAD_MODEL     __WIRE_LOAD_MODEL__
-set     DRIVE_CELL          __DRIVE_CELL__
-set     DRIVE_PIN           __DRIVE_PIN__
-set     OPERA_CONDITION     __OPERA_CONDITION__
-#set     ALL_IN_EXCEPT_CLK   [remove_from_collection [all_inputs] [get_ports $CLK_NAME]]
-#set     INPUT_DELAY         [expr   $CLK_PERIOD*0.6]
-#set     INPUT_TRANSITION    [expr   0.12]
 
 #===================================================
 # IO约束
@@ -110,14 +112,14 @@ set_isolate_ports   -type   buffer                      [all_outputs]
 
 # 設置操作条件
 set_operating_condition -max            $OPERA_CONDITION    \
-                        -max_library    $LIB_NAME
+                        -max_library    $SIGNAL_LIB_NAME
 # 关闭自动选择线负载模型
 set     auto_wire_load_selection        false
 # 设置线负载模式
 set_wire_load_mode      top 
 # 设置线负载模型
 set_wire_load_model     -name           $WIRE_LOAD_MODEL \
-                        -library        $LIB_NAME
+                        -library        $SIGNAL_LIB_NAME
 
 #===================================================
 # 面積約束
