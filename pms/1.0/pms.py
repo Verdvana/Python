@@ -20,6 +20,7 @@ class Path:
     cons_path:str="None"
     mem_path:str="None"
     param:str="None"
+    port_define:str="None"
     lib_path:str="None"
     sub_rtl_list:str="None"
     sub_path_list:str="None"
@@ -93,7 +94,7 @@ def get_env_var(var,bak):
         return os.environ.get(var)
     else:
         return bak
-def get_rtl(path):
+def get_rtl_file(path):
     rtl_list = []
     rtl_pattern = ["*.v", "*.sv", "*.vhd", "*.vhdl"]
     for pattern in rtl_pattern:
@@ -102,6 +103,24 @@ def get_rtl(path):
         error_exit(f"Not find RTL files in {path} with pattern {rtl_pattern}")
     rtl_list = " ".join(os.path.basename(f) for f in rtl_list)
     return rtl_list
+def get_port_define(rtl_file):
+    with open(rtl_file,'r') as f:
+        content = f.read()
+    content = re.sub(r'\/\*.*?\*\/','',content,flags=re.DOTALL)
+    content = re.sub(r'\/\/.*','',content)
+    match = re.search(r'module\s+\w+\s*(?:#\s*\(.*?\)\s*)?\((.*?)\);\s*',content,re.DOTALL)
+    if not match:
+        error_exit("Can not find port define")
+    raw_port_define = match.group(1)
+    port2logic = re.sub(r'\b(input\s+wire|output\s+reg|output\s+logic|output\s+wire|input|output|inout|reg|wire)\b','logic',raw_port_define)
+    port2logic = re.sub(r'\blogic\s+logic\b','logic',port2logic)
+    port2logic = re.sub(r'^\s*\n','',port2logic,flags=re.MULTILINE)
+    port2logic = re.sub(r'[ \t]+(?=\n)','',port2logic)
+    port2logic = re.sub(r'[ \t]+(?=\n)','',port2logic)
+    port2logic = re.sub(r'[,;]+(?=\n)','',port2logic)
+    port2logic = re.sub(r'$(?=\n)','\1;',port2logic,flags=re.MULTILINE)
+    return port2logic
+
 def parse_path(sheet):
     path=Path()
     path.top = sheet['B1'].value
@@ -117,7 +136,7 @@ def parse_path(sheet):
     path.rtl_path = re.sub(r"\$\{top_path\}",path.top_path,path.rtl_path,flags=re.IGNORECASE)
     print(f"Top RTL dir: {path.rtl_path}")
     
-    path.rtl_list = get_rtl(path.rtl_path)
+    path.rtl_list = get_rtl_file(path.rtl_path)
     
     print(f"RTL files found: {path.rtl_list}")
 
@@ -150,7 +169,7 @@ def parse_path(sheet):
     path.param = path.param.split(")")[0].rstrip()
     print(f"Parameter of top design: {path.param}")
 
-
+    path.port_define = get_port_define(path.rtl_path+"/"+top_file,)
 
 
     path.tb_path = sheet['B4'].value
@@ -179,7 +198,7 @@ def parse_path(sheet):
 
         print(f"sub_rtl_path:{sub_rtl_path}")
         path.sub_path_list += f" {sub_rtl_path}"
-        path.sub_rtl_list += " " + get_rtl(sub_rtl_path)
+        path.sub_rtl_list += " " + get_rtl_file(sub_rtl_path)
         row_index += 1
 
     if os.path.exists(path.cons_path):
@@ -203,80 +222,81 @@ def parse_path(sheet):
 
     return path
 
-def parse_config(sheet,path):
+def parse_config(sheet):
     config=Config()
     config.path_root                    = sheet['B2'].value
     config.path_sub                     = standardize_list(sheet['C2'].value)
-    config.library.target               = standardize_list(sheet['B5'].value)
-    config.library.link                 = standardize_list(sheet['C5'].value)
-    config.library.symbol               = sheet['D5'].value
-    config.library.synthetic            = sheet['E5'].value
-    config.signal_driving_cell.name     = sheet['B8'].value
-    config.signal_driving_cell.output   = sheet['D8'].value
-    config.signal_driving_cell.input    = sheet['E8'].value
-    config.signal_driving_cell.lib      = sheet['F8'].value
-    config.clock_driving_cell.name      = sheet['B9'].value
-    config.clock_driving_cell.output    = sheet['D9'].value
-    config.clock_driving_cell.input     = sheet['E9'].value
-    config.clock_driving_cell.lib       = sheet['F9'].value
-    config.signal_trans.min             = sheet['B12'].value
-    config.signal_trans.max             = sheet['C12'].value
-    config.output_load.min              = sheet['B13'].value
-    config.output_load.max              = sheet['C13'].value
-    config.output_trans.min             = sheet['B14'].value
-    config.output_trans.max             = sheet['C14'].value
-    config.output_delay.min             = sheet['B15'].value
-    config.output_delay.max             = sheet['C15'].value
-    config.input_delay.min              = sheet['B16'].value
-    config.input_delay.max              = sheet['C16'].value
-    config.input_trans.min              = sheet['B17'].value
-    config.input_trans.max              = sheet['C17'].value
-    config.wire_load_model              = sheet['F12'].value
-    config.opera_condition              = sheet['F15'].value
-    config.setup_margin                 = sheet['B19'].value
-    config.hold_margin                  = sheet['B20'].value
-    config.ct.sm.source_latency.min     = sheet['B25'].value
-    config.ct.sm.source_latency.max     = sheet['C25'].value
-    config.ct.sm.network_latency.min    = sheet['D25'].value
-    config.ct.sm.network_latency.max    = sheet['E25'].value
-    config.ct.sm.trans.min              = sheet['F25'].value
-    config.ct.sm.trans.max              = sheet['G25'].value
-    config.ct.sm.skew                   = sheet['H25'].value
-    config.ct.sm.noise                  = sheet['I25'].value
-    config.ct.md.source_latency.min     = sheet['B26'].value
-    config.ct.md.source_latency.max     = sheet['C26'].value
-    config.ct.md.network_latency.min    = sheet['D26'].value
-    config.ct.md.network_latency.max    = sheet['E26'].value
-    config.ct.md.trans.min              = sheet['F26'].value
-    config.ct.md.trans.max              = sheet['G26'].value
-    config.ct.md.skew                   = sheet['H26'].value
-    config.ct.md.noise                  = sheet['I26'].value
-    config.ct.lg.source_latency.min     = sheet['B27'].value
-    config.ct.lg.source_latency.max     = sheet['C27'].value
-    config.ct.lg.network_latency.min    = sheet['D27'].value
-    config.ct.lg.network_latency.max    = sheet['E27'].value
-    config.ct.lg.trans.min              = sheet['F27'].value
-    config.ct.lg.trans.max              = sheet['G27'].value
-    config.ct.lg.skew                   = sheet['H27'].value
-    config.ct.lg.noise                  = sheet['I27'].value
-    config.ct.raw.source_latency.min    = sheet['B28'].value
-    config.ct.raw.source_latency.max    = sheet['C28'].value
-    config.ct.raw.network_latency.min   = sheet['D28'].value
-    config.ct.raw.network_latency.max   = sheet['E28'].value
-    config.ct.raw.trans.min             = sheet['F28'].value
-    config.ct.raw.trans.max             = sheet['G28'].value
-    config.ct.raw.skew                  = sheet['H28'].value
-    config.ct.raw.noise                 = sheet['I28'].value
+    if sheet.title in ('synth','pt'):
+        config.library.target               = standardize_list(sheet['B5'].value)
+        config.library.link                 = standardize_list(sheet['C5'].value)
+        config.library.symbol               = sheet['D5'].value
+        config.library.synthetic            = sheet['E5'].value
+        config.signal_driving_cell.name     = sheet['B8'].value
+        config.signal_driving_cell.output   = sheet['D8'].value
+        config.signal_driving_cell.input    = sheet['E8'].value
+        config.signal_driving_cell.lib      = sheet['F8'].value
+        config.clock_driving_cell.name      = sheet['B9'].value
+        config.clock_driving_cell.output    = sheet['D9'].value
+        config.clock_driving_cell.input     = sheet['E9'].value
+        config.clock_driving_cell.lib       = sheet['F9'].value
+        config.signal_trans.min             = sheet['B12'].value
+        config.signal_trans.max             = sheet['C12'].value
+        config.output_load.min              = sheet['B13'].value
+        config.output_load.max              = sheet['C13'].value
+        config.output_trans.min             = sheet['B14'].value
+        config.output_trans.max             = sheet['C14'].value
+        config.output_delay.min             = sheet['B15'].value
+        config.output_delay.max             = sheet['C15'].value
+        config.input_delay.min              = sheet['B16'].value
+        config.input_delay.max              = sheet['C16'].value
+        config.input_trans.min              = sheet['B17'].value
+        config.input_trans.max              = sheet['C17'].value
+        config.wire_load_model              = sheet['F12'].value
+        config.opera_condition              = sheet['F15'].value
+        config.setup_margin                 = sheet['B19'].value
+        config.hold_margin                  = sheet['B20'].value
+        config.ct.sm.source_latency.min     = sheet['B25'].value
+        config.ct.sm.source_latency.max     = sheet['C25'].value
+        config.ct.sm.network_latency.min    = sheet['D25'].value
+        config.ct.sm.network_latency.max    = sheet['E25'].value
+        config.ct.sm.trans.min              = sheet['F25'].value
+        config.ct.sm.trans.max              = sheet['G25'].value
+        config.ct.sm.skew                   = sheet['H25'].value
+        config.ct.sm.noise                  = sheet['I25'].value
+        config.ct.md.source_latency.min     = sheet['B26'].value
+        config.ct.md.source_latency.max     = sheet['C26'].value
+        config.ct.md.network_latency.min    = sheet['D26'].value
+        config.ct.md.network_latency.max    = sheet['E26'].value
+        config.ct.md.trans.min              = sheet['F26'].value
+        config.ct.md.trans.max              = sheet['G26'].value
+        config.ct.md.skew                   = sheet['H26'].value
+        config.ct.md.noise                  = sheet['I26'].value
+        config.ct.lg.source_latency.min     = sheet['B27'].value
+        config.ct.lg.source_latency.max     = sheet['C27'].value
+        config.ct.lg.network_latency.min    = sheet['D27'].value
+        config.ct.lg.network_latency.max    = sheet['E27'].value
+        config.ct.lg.trans.min              = sheet['F27'].value
+        config.ct.lg.trans.max              = sheet['G27'].value
+        config.ct.lg.skew                   = sheet['H27'].value
+        config.ct.lg.noise                  = sheet['I27'].value
+        config.ct.raw.source_latency.min    = sheet['B28'].value
+        config.ct.raw.source_latency.max    = sheet['C28'].value
+        config.ct.raw.network_latency.min   = sheet['D28'].value
+        config.ct.raw.network_latency.max   = sheet['E28'].value
+        config.ct.raw.trans.min             = sheet['F28'].value
+        config.ct.raw.trans.max             = sheet['G28'].value
+        config.ct.raw.skew                  = sheet['H28'].value
+        config.ct.raw.noise                 = sheet['I28'].value
 
-    if config.library.target is None or str(config.library.target).strip() == "":
-        error_exit("Not define target library")
-    print(f"Target Library: {config.library.target}")
-    config.library.link = config.library.target + " " + config.library.link + " *"
-    print(f"Link Library: {config.library.link}")
-    if config.library.symbol is None or str(config.library.symbol).strip() == "":
-        error_exit("Not define symbol library")
-    print(f"Symbol Library: {config.library.symbol}")
-    print(f"Synthetic Library: {config.library.synthetic}")
+        if config.library.target is None or str(config.library.target).strip() == "":
+            error_exit("Not define target library")
+        print(f"Target Library: {config.library.target}")
+        config.library.link = config.library.target + " " + config.library.link + " *"
+        print(f"Link Library: {config.library.link}")
+        if config.library.symbol is None or str(config.library.symbol).strip() == "":
+            error_exit("Not define symbol library")
+        print(f"Symbol Library: {config.library.symbol}")
+        print(f"Synthetic Library: {config.library.synthetic}")
     return config
 
 def parse_clock(sheet):
@@ -327,16 +347,16 @@ def gen_cons_pt(pt_config):
 
 def gen_cons_synth(synth_config,path):
     date=datetime.now().strftime("%Y-%m-%d")
-    synth_config.path_root = path.top_path + "/" + synth_config.path_root 
+    synth_config.path_root = os.path.join(path.top_path,synth_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
     synth_cons_temp = script_dir + "/templates/synthesis/synth.tcl"
     synopsys_setup_temp = script_dir + "/templates/synthesis/.synopsys_dc.setup"
     makefile_temp = script_dir + "/templates/synthesis/Makefile"
     sub_dir = synth_config.path_sub.split()
 
-    top_cons = synth_config.path_root + "/scripts/" + path.top + ".tcl"
-    synopsys_setup = synth_config.path_root+"/work/.synopsys_dc.setup"
-    makefile = synth_config.path_root+"/Makefile"
+    top_cons = os.path.join(synth_config.path_root,"scripts",path.top+".tcl")
+    synopsys_setup = os.path.join(synth_config.path_root,"work",".synopsys_dc.setup")
+    makefile = os.path.join(synth_config.path_root,"Makefile")
     if os.path.exists(synth_config.path_root):
         user_input = input(f"Warning: DIR {synth_config.path_root} existed, do you want to clean it and continue?(y/n):").strip().lower()
         if user_input == "y":
@@ -419,19 +439,117 @@ def gen_cons_synth(synth_config,path):
     replace_in_file(top_cons,'__RESET_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_rst.tcl"))
     replace_in_file(top_cons,'__IO_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_io.tcl"))
 
-    cons = ""
-    #cons += f"\n{synth_config.path}"
 
-    
-    print(cons)
-def gen_tb(clock_dict,rst_dict,io_dict,path):
-    tb = "\n//========================================\n#The time unit and precision"
+def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
+    date=datetime.now().strftime("%Y-%m-%d")
+    sim_config.path_root = os.path.join(path.top_path,sim_config.path_root)
+    script_dir=os.path.dirname(os.path.abspath(__file__))
+    makefile_temp = script_dir + "/templates/simulation/Makefile"
+    sub_dir = sim_config.path_sub.split()
+    makefile = os.path.join(sim_config.path_root,"Makefile")
+    if os.path.exists(sim_config.path_root):
+        user_input = input(f"Warning: DIR {sim_config.path_root} existed, do you want to clean it and continue?(y/n):").strip().lower()
+        if user_input == "y":
+            shutil.rmtree(sim_config.path_root)
+        elif user_input == "n":
+            error_exit("User terminal script.")
+        else:
+            error_exit("Input error.")
+    for dir in sub_dir:
+        new_dir = os.path.join(sim_config.path_root,dir)
+        os.makedirs(new_dir)
+
+    shutil.copy(makefile_temp,makefile)
+
+    replace_in_file(makefile,'__TOP__',path.top)
+    replace_in_file(makefile,'__DATE__',date)
+    replace_in_file(makefile,'__ROOT_PATH__',sim_config.path_root)
+
+    param_tb = ""
+    matches = re.findall(r'(\w+)\s*=',path.param)
+    param_tb = ','.join([f'.{name}({name})' for name in matches])
+
+
+    tb = "\n//========================================\n//The time unit and precision"
     tb += "\n`timescale  1ns/1ps"
     tb += f"\nmodule {path.top}_tb;"
     tb += "\n//========================================"
     tb += f"\n    parameter {path.param};"
-    print (tb)
+    for name,row_data in clock_dict.items():
+        if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
+            tb += f"\n    parameter PERIOD_{name.upper()} = {clock_dict[name]['period']};"
+    tb += "\n"+path.port_define
+    tb += "\n    //========================================\n    //Instantiate"
+    tb += f"\n    {path.top} #(\n        {param_tb}\n    ) u_{path.top}(\n        .*\n    );"
+    tb += "\n    //========================================\n    //Clock drive"
+    tb += "\n    initial begin"
+    for name,row_data in clock_dict.items():
+        if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
+            tb += f"\n        {name} = '0;\n        forever #(PERIOD_{name.upper()}/2) {name}= ~{name};"
+    tb += "\n    end"
+    tb += "\n    //========================================\n    //Task reset"
+    rst_list = ""
+    for reset,row_data in rst_dict.items():
+        tb += f"\n    task task_rst_{reset};"
+        rst_list += f"        task_rst_{reset};\n"
+        if "neg" in rst_dict[reset]['edge']:
+            tb += f"\n        {reset} = '0;#1;"
+            tb += f"\n        {reset} = '1;#1;"
+        elif "pos" in rst_dict[reset]['edge']:
+            tb += f"\n        {reset} = '1;#1;"
+            tb += f"\n        {reset} = '0;#1;"
+        else:
+            error_exit(f"Can not capture value of reset {reset}")
+        tb += f"\n    endtask"
+    tb += "\n    //========================================\n    //Task initial"
+    tb += "\n    task task_init;"
+    for pin,row_data in io_dict.items():
+        if "in" in io_dict[pin]['direction']:
+            tb += f"\n        {pin} = '0;"
+    tb += f"\n        #5;"
+    tb += "\n    endtask;"
+    tb += "\n    //========================================\n    //Simulation"
+    tb += "\n    initial begin"
+    tb += "\n        //Reset&Init"
+    tb += "\n        task_init;"
+    tb += f"\n{rst_list}"
+    tb += "\n        //Simulation behavior\n\n\n"
+    tb += "\n        #400;"
+    tb += "\n        $display(\"\\033[31;5m 仿真完成! \\033[0m\",`__FILE__,`__LINE__);"
+    tb += "\n        $finish;"
+    tb += "\n    end"
+    tb += "\n    //========================================\n    //VCS Simulation"
+    tb += "\n    `ifdef VCS_SIM"
+    tb += "\n        //VCS系统函数"
+    tb += "\n        initial begin"
+    tb += "\n            $vcdpluson(); //打开VCD+文件记录"
+    tb += f"\n            $fsdbDumpfile(\"{os.path.join(path.top_path,sim_config.path_root)}/sim/Edge_Detect.fsdb\"); //生成fsdb"
+    tb += "\n            $fsdbDumpvars(\"+all\");"
+    tb += "\n            $vcdplusmemon(); //查看多维数组"
+    tb += "\n        end"
+    tb += "\n        //后仿真"
+    tb += "\n        `ifdef POST_SIM"
+    tb += "\n        //back annotate the SDF file"
+    tb += "\n        initial begin"
+    tb += f"\n            $sdf_annotate(\"{os.path.join(path.top_path,synth_config.path_root,'mapped',path.top+'.sdf')}\","
+    tb += f"\n                          {path.top}.u_{path.top},,,"
+    tb += f"\n                          \"TYPICAL\","
+    tb += f"\n                          \"1:1:1\","
+    tb += f"\n                          \"FROM_MTM\");"
+    tb += "\n            $display(\"\\033[31;5m back annotate \033[0m\",`__FILE__,`__LINE__);"
+    tb += "\n        end"
+    tb += "\n        `endif"
+    tb += "\n    `endif"
+    tb += "\nendmodule"
 
+    filelist = '\n'.join([path.rtl_path+ '/'+ rtl_file for rtl_file in path.rtl_list.split()])
+    #rtl_list = path.rtl_list.split()
+    #for rtl_file in rtl_list:
+    #    filelist += f"{path.rtl_path}/{rtl_file}\n"
+    filelist += "\n".join(path.sub_rtl_list.split())
+    filelist += f"\n{path.tb_path}/{path.top}_tb.sv"
+    print(filelist)
+    return tb,filelist
 
 def gen_cons_clk(clock_dict):
     cons = "\n#========================================\n#Clock Constraint"
@@ -556,12 +674,11 @@ def main(filename):
     if 'path' in wb.sheetnames:
         path = parse_path(wb['path'])
     if 'pt' in wb.sheetnames:
-        pt_config = parse_config(wb['pt'],path)
+        pt_config = parse_config(wb['pt'])
         #cons_pt = gen_cons_pt(pt_config,design)
     if 'synth' in wb.sheetnames:
-        synth_config = parse_config(wb['synth'],path)
+        synth_config = parse_config(wb['synth'])
         cons_synth = gen_cons_synth(synth_config,path)
-
     if 'clock' in wb.sheetnames:
         clock_dict = parse_clock(wb['clock'])
         #print (clock_list)
@@ -574,7 +691,8 @@ def main(filename):
         #print (io_list)
         cons_io = gen_cons_io(io_dict,clock_dict)
     if 'sim' in wb.sheetnames:
-        gen_tb(clock_dict,rst_dict,io_dict,path)
+        sim_config = parse_config(wb['sim'])
+        tb,sim_filelist= gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config)
     #print(pt_config)
     #print(synth_config)
     #print(clock_list)
@@ -584,6 +702,10 @@ def main(filename):
         f.write(cons_rst)
     with open(os.path.join(path.cons_path,path.top+"_io.tcl"),"w",encoding="utf-8")as f:
         f.write(cons_io)
+    with open(os.path.join(path.tb_path,path.top+"_tb.sv"),"w",encoding="utf-8")as f:
+        f.write(tb)
+    with open(os.path.join(path.top_path,sim_config.path_root,"work","filelist.f"),"w",encoding="utf-8")as f:
+        f.write(sim_filelist)
 
     #print (cons)
 
