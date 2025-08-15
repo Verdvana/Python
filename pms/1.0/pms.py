@@ -24,12 +24,14 @@ class Path:
     lib_path:str="None"
     sub_rtl_list:str="None"
     sub_path_list:str="None"
+    sub_path_list_raw:str="None"
 @dataclass
 class Range:
     min:str="None"
     max:str="None"
 @dataclass
 class Library:
+    post_sim:str="None"
     target:str="None"
     link:str="None"
     symbol:str="None"
@@ -80,8 +82,10 @@ def replace_in_file(file_path,target,replacement):
         f.seek(0)
         f.write(content.replace(target,replacement))
         f.truncate()
+def print_info(msg):
+    print(f"[PMS] {msg}")
 def error_exit(msg):
-    print(f"错误：{msg}", file=sys.stderr)
+    print(f"[PMS] FATAL：{msg}", file=sys.stderr)
     sys.exit(1)
 def standardize_list(list):
     if not list:
@@ -89,6 +93,22 @@ def standardize_list(list):
     elif list is None:
         return ""
     return list.replace(","," ").replace(";"," ").replace("\n"," ").replace("\r"," ")
+def check_dir(parent_dir,sub_dir=None):
+    if os.path.exists(parent_dir):
+        user_input = input(f"[PMS] WARNING: DIR {parent_dir} existed, do you want to clean it and continue?(y/n):").strip().lower()
+        if user_input == "y":
+            shutil.rmtree(parent_dir)
+            os.makedirs(parent_dir)
+            if sub_dir:
+                for each_sub_dir in sub_dir:
+                    os.makedirs(os.path.join(parent_dir,each_sub_dir))
+            print_info(f"WARNING: Clean {parent_dir} sucessful")
+            return 1
+        elif user_input == "n":
+            print_info(f"WARNING: No change for {parent_dir}")
+            return 0
+        else:
+            error_exit("Input error.")
 def get_env_var(var,bak):
     if var in os.environ:
         return os.environ.get(var)
@@ -114,40 +134,65 @@ def get_port_define(rtl_file):
     raw_port_define = match.group(1)
     port2logic = re.sub(r'\b(input\s+wire|output\s+reg|output\s+logic|output\s+wire|input|output|inout|reg|wire)\b','logic',raw_port_define)
     port2logic = re.sub(r'\blogic\s+logic\b','logic',port2logic)
-    port2logic = re.sub(r'^\s*\n','',port2logic,flags=re.MULTILINE)
-    port2logic = re.sub(r'[ \t]+(?=\n)','',port2logic)
-    port2logic = re.sub(r'[ \t]+(?=\n)','',port2logic)
-    port2logic = re.sub(r'[,;]+(?=\n)','',port2logic)
-    port2logic = re.sub(r'$(?=\n)','\1;',port2logic,flags=re.MULTILINE)
+    port2logic = re.sub(r'(?m)^[ \t\f\r\v]*(?:\r?\n|$)','',port2logic)
+    port2logic = re.sub(r'(?m)[ \t\f\r\v]+$','',port2logic)
+    port2logic = re.sub(r'(?m)[,;]+$','',port2logic)
+    port2logic = re.sub(r'(?m)(\S)$',r'\1;',port2logic)
     return port2logic
+def get_top(sheet):
+    top = sheet['B1'].value
+    if top is None or str(top).strip() == "":
+        error_exit("Not define top module.")
+    return top
+def get_top_path(top,sheet):
+    top_path = get_env_var(top,sheet['B2'].value)
+    top_path = re.sub(r"\$\{top\}",top,top_path,flags=re.IGNORECASE)
+    if top_path is None:
+        error_exit("Error: Not define design path")
+    return top_path
+def get_top_rtl_path(top_path,sheet):
+    top_rtl_path = sheet['B3'].value
+    top_rtl_path = re.sub(r"\$\{top_path\}",top_path,top_rtl_path,flags=re.IGNORECASE)
+    return top_rtl_path
+def get_sub_rtl(sheet):
+    sub_path_list = ""
+    sub_rtl_list = ""
+    sub_rtl_list_raw = ""
+    row_index   = 10
+    while True:
+        row = [cell.value for cell in sheet[row_index]]
+        if row[0] is None:
+            break
+        sub_path = get_env_var(row[0],row[1])
+        sub_sheet = openpyxl.load_workbook(os.path.join(sub_path,"pms",row[0]+".xlsx"))['path']
+        sub_top_path = get_top_rtl_path(get_top_path(get_top(sub_sheet),sub_sheet),sub_sheet)
+        sub_path_list += f" {sub_top_path}"
+        sub_rtl_list += " " + get_rtl_file(sub_top_path)
+        sub_rtl_list_raw += ' '.join([sub_top_path+'/'+rtl_name for rtl_name in sub_rtl_list.split()])
+        sub_sub_path_list,sub_sub_rtl_list,sub_sub_rtl_list_raw = get_sub_rtl(sub_sheet)
+        sub_path_list += sub_sub_path_list
+        sub_rtl_list += sub_sub_rtl_list
+        sub_rtl_list_raw += sub_sub_rtl_list_raw
+        row_index += 1
+    return sub_path_list,sub_rtl_list,sub_rtl_list_raw
 
 def parse_path(sheet):
     path=Path()
-    path.top = sheet['B1'].value
-    if path.top is None or str(path.top).strip() == "":
-        error_exit("Not define top module.")
-    print(f"Design top module: {path.top}")
-    path.top_path = get_env_var(path.top,sheet['B2'].value)
-    path.top_path = re.sub(r"\$\{top\}",path.top,path.top_path,flags=re.IGNORECASE)
-    if path.top_path is None:
-        error_exit("Error: Not define design path")
-
-    path.rtl_path = sheet['B3'].value
-    path.rtl_path = re.sub(r"\$\{top_path\}",path.top_path,path.rtl_path,flags=re.IGNORECASE)
-    print(f"Top RTL dir: {path.rtl_path}")
-    
+    path.top = get_top(sheet)
+    print_info(f"Design top module: {path.top}")
+    path.top_path = get_top_path(path.top,sheet)
+    print_info(f"Top dir: {path.top_path}")
+    path.rtl_path = get_top_rtl_path(path.top_path,sheet)
     path.rtl_list = get_rtl_file(path.rtl_path)
-    
-    print(f"RTL files found: {path.rtl_list}")
+    print_info(f"RTL files found: {path.rtl_list}")
 
     top_pattern = path.top+"."
     top_match = [item for item in path.rtl_list.split() if top_pattern in item]
     if len(top_match) == 1:
         top_file = top_match[0]
     else:
-        print(f"Top-level file: {top_match}")
+        print_info(f"ERROR:Top-level file: {top_match}")
         error_exit("The top-level file is not unique or not found.")
-    print(f"Top-level file: {top_file}")
 
     param_lines = []
     found_param = False
@@ -167,9 +212,9 @@ def parse_path(sheet):
     path.param = " ".join(param_lines).replace("\n"," ").replace("\r"," ")
     path.param = path.param[len("parameter"):].lstrip()
     path.param = path.param.split(")")[0].rstrip()
-    print(f"Parameter of top design: {path.param}")
+    print_info(f"Parameter of top design: {path.param}")
 
-    path.port_define = get_port_define(path.rtl_path+"/"+top_file,)
+    path.port_define = get_port_define(path.rtl_path+"/"+top_file)
 
 
     path.tb_path = sheet['B4'].value
@@ -184,41 +229,11 @@ def parse_path(sheet):
     path.lib_path = sheet['B7'].value
     path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
 
-    path.sub_path_list = ""
-    path.sub_rtl_list = ""
-    row_index   = 10
-    while True:
-        row = [cell.value for cell in sheet[row_index]]
-        if row[0] is None:
-            break
-        sub_path = get_env_var(row[0],row[1])
-        sub_sheet = openpyxl.load_workbook(os.path.join(sub_path,"pms",row[0]+".xlsx"))['path']
-        sub_rtl_path = sub_sheet['B3'].value
-        sub_rtl_path = re.sub(r"\$\{top_path\}",sub_path,sub_rtl_path,flags=re.IGNORECASE)
 
-        print(f"sub_rtl_path:{sub_rtl_path}")
-        path.sub_path_list += f" {sub_rtl_path}"
-        path.sub_rtl_list += " " + get_rtl_file(sub_rtl_path)
-        row_index += 1
+    path.sub_path_list,path.sub_rtl_list,path.sub_rtl_list_raw = get_sub_rtl(sheet)
 
-    if os.path.exists(path.cons_path):
-        user_input = input(f"Warning: DIR {path.cons_path} existed, do you want to clean it and continue?(y/n):").strip().lower()
-        if user_input == "y":
-            shutil.rmtree(path.cons_path)
-        elif user_input == "n":
-            error_exit("User terminal script.")
-        else:
-            error_exit("Input error.")
-    os.makedirs(path.cons_path)
-    if os.path.exists(path.tb_path):
-        user_input = input(f"Warning: DIR {path.tb_path} existed, do you want to clean it and continue?(y/n):").strip().lower()
-        if user_input == "y":
-            shutil.rmtree(path.tb_path)
-        elif user_input == "n":
-            error_exit("User terminal script.")
-        else:
-            error_exit("Input error.")
-    os.makedirs(path.tb_path)
+    check_dir(path.cons_path)
+    check_dir(path.tb_path)
 
     return path
 
@@ -226,7 +241,9 @@ def parse_config(sheet):
     config=Config()
     config.path_root                    = sheet['B2'].value
     config.path_sub                     = standardize_list(sheet['C2'].value)
-    if sheet.title in ('synth','pt'):
+    if sheet.title in ('sim'):
+        config.library.post_sim             = sheet['B5'].value
+    if sheet.title in ('synth','sta'):
         config.library.target               = standardize_list(sheet['B5'].value)
         config.library.link                 = standardize_list(sheet['C5'].value)
         config.library.symbol               = sheet['D5'].value
@@ -341,11 +358,123 @@ def parse_io(sheet):
             io_dict[pin] = row_data
         row_index += 1
     return io_dict
+def gen_env_sg(path,sg_config):
+    date=datetime.now().strftime("%Y-%m-%d")
+    sg_config.path_root = os.path.join(path.top_path,sg_config.path_root)
+    script_dir=os.path.dirname(os.path.abspath(__file__))
+    makefile_temp = script_dir + "/templates/spyglass/Makefile"
+    sg_cons_temp = script_dir + "/templates/spyglass/sg.tcl"
+    sub_dir = sg_config.path_sub.split()
+    makefile = os.path.join(sg_config.path_root,"Makefile")
+    sg_cons = os.path.join(sg_config.path_root,'scripts',f"{path.top}.tcl")
+    
+    if check_dir(sg_config.path_root) == 0:
+        return 0
+    
+    shutil.copy(makefile_temp,makefile)
+    shutil.copy(sg_cons_temp,sg_cons)
+    replace_in_file(makefile,'__TOP__',path.top)
+    replace_in_file(makefile,'__DATE__',date)
+    replace_in_file(makefile,'__ROOT_PATH__',os.path.join(sg_config.path_root))
 
-def gen_cons_pt(pt_config):
-    cons = ""
+    replace_in_file(sg_cons,'__TOP__',path.top)
+    replace_in_file(sg_cons,'__DATE__',date)
+    replace_in_file(sg_cons,'__ROOT_PATH__',sg_config.path_root)
 
-def gen_cons_synth(synth_config,path):
+
+    filelist = "//Src file\n"
+    filelist += '\n'.join([path.rtl_path+ '/'+ rtl_file for rtl_file in path.rtl_list.split()])
+    filelist += '\n'+"\n".join(path.sub_rtl_list_raw.split())
+    with open(os.path.join(path.top_path,sg_config.path_root,"work","filelist.f"),"w",encoding="utf-8")as f:
+        f.write(filelist)
+
+def gen_env_sta(path,synth_config,sta_config):
+    date=datetime.now().strftime("%Y-%m-%d")
+    param_netlist = re.sub(r'\s*,\s*','_',path.param)
+    param_netlist = re.sub(r'[^\w]','',param_netlist)
+    sta_config.path_root = os.path.join(path.top_path,sta_config.path_root)
+    script_dir=os.path.dirname(os.path.abspath(__file__))
+    sta_cons_temp = script_dir + "/templates/sta/sta.tcl"
+    synopsys_setup_temp = script_dir + "/templates/sta/.synopsys_pt.setup"
+    makefile_temp = script_dir + "/templates/sta/Makefile"
+    sub_dir = sta_config.path_sub.split()
+
+    top_cons = os.path.join(sta_config.path_root,"scripts",path.top+".tcl")
+    synopsys_setup = os.path.join(sta_config.path_root,"work",".synopsys_pt.setup")
+    makefile = os.path.join(sta_config.path_root,"Makefile")
+    if check_dir(sta_config.path_root,sub_dir) == 0:
+        return 0
+
+    shutil.copy(sta_cons_temp,top_cons)
+    shutil.copy(synopsys_setup_temp,synopsys_setup)
+    shutil.copy(makefile_temp,makefile)
+
+
+    budget = "array set ct_budget {"
+    budget += f"\n    sm.source_latency.min    {sta_config.ct.sm.source_latency.min}"
+    budget += f"\n    sm.source_latency.max    {sta_config.ct.sm.source_latency.max}"
+    budget += f"\n    sm.network_latency.min   {sta_config.ct.sm.network_latency.min}"
+    budget += f"\n    sm.network_latency.max   {sta_config.ct.sm.network_latency.max}"
+    budget += f"\n    sm.trans.min             {sta_config.ct.sm.trans.min}"
+    budget += f"\n    sm.trans.max             {sta_config.ct.sm.trans.max}"
+    budget += f"\n    sm.skew                  {sta_config.ct.sm.skew}"
+    budget += f"\n    sm.noise                 {sta_config.ct.sm.noise}"
+    budget += f"\n    md.source_latency.min    {sta_config.ct.md.source_latency.min}"
+    budget += f"\n    md.source_latency.max    {sta_config.ct.md.source_latency.max}"
+    budget += f"\n    md.network_latency.min   {sta_config.ct.md.network_latency.min}"
+    budget += f"\n    md.network_latency.max   {sta_config.ct.md.network_latency.max}"
+    budget += f"\n    md.trans.min             {sta_config.ct.md.trans.min}"
+    budget += f"\n    md.trans.max             {sta_config.ct.md.trans.max}"
+    budget += f"\n    md.skew                  {sta_config.ct.md.skew}"
+    budget += f"\n    md.noise                 {sta_config.ct.md.noise}"
+    budget += f"\n    lg.source_latency.min    {sta_config.ct.lg.source_latency.min}"
+    budget += f"\n    lg.source_latency.max    {sta_config.ct.lg.source_latency.max}"
+    budget += f"\n    lg.network_latency.min   {sta_config.ct.lg.network_latency.min}"
+    budget += f"\n    lg.network_latency.max   {sta_config.ct.lg.network_latency.max}"
+    budget += f"\n    lg.trans.min             {sta_config.ct.lg.trans.min}"
+    budget += f"\n    lg.trans.max             {sta_config.ct.lg.trans.max}"
+    budget += f"\n    lg.skew                  {sta_config.ct.lg.skew}"
+    budget += f"\n    lg.noise                 {sta_config.ct.lg.noise}"
+    budget += f"\n    raw.source_latency.min   {sta_config.ct.raw.source_latency.min}"
+    budget += f"\n    raw.source_latency.max   {sta_config.ct.raw.source_latency.max}"
+    budget += f"\n    raw.network_latency.min  {sta_config.ct.raw.network_latency.min}"
+    budget += f"\n    raw.network_latency.max  {sta_config.ct.raw.network_latency.max}"
+    budget += f"\n    raw.trans.min            {sta_config.ct.raw.trans.min}"
+    budget += f"\n    raw.trans.max            {sta_config.ct.raw.trans.max}"
+    budget += f"\n    raw.skew                 {sta_config.ct.raw.skew}"
+    budget += f"\n    raw.noise                {sta_config.ct.raw.noise}"
+    budget += "\n}"
+    budget += f"\nset SETUP_MARGIN  {sta_config.setup_margin}"
+    budget += f"\nset HOLD_MARGIN   {sta_config.hold_margin}"
+
+
+    replace_in_file(makefile,'__SCRIPT__',top_cons)
+
+    replace_in_file(synopsys_setup,'__ROOT__',path.top_path)
+    replace_in_file(synopsys_setup,'__LIB_PATH__',path.lib_path)
+    replace_in_file(synopsys_setup,'__NETLIST_PATH__',synth_config.path_root+'/mapped')
+    replace_in_file(synopsys_setup,'__TARGET_LIB__',synth_config.library.target)
+    replace_in_file(synopsys_setup,'__LINK_LIB__',synth_config.library.link)
+    replace_in_file(top_cons,'__DATE__',date)
+    replace_in_file(top_cons,'__TOP__',path.top)
+    replace_in_file(top_cons,'__TARGET_LIB__',synth_config.library.target)
+    replace_in_file(top_cons,'__TOP_NETLIST_MODULE__',path.top+'_'+param_netlist)
+    replace_in_file(top_cons,'__NETLIST__',path.top+'.v')
+    replace_in_file(top_cons,'__CLOCK_LIB_NAME__',synth_config.clock_driving_cell.lib)
+    replace_in_file(top_cons,'__CLOCK_DRIVE_CELL__',synth_config.clock_driving_cell.name)
+    replace_in_file(top_cons,'__CLOCK_DRIVE_PIN__',synth_config.clock_driving_cell.output)
+    replace_in_file(top_cons,'__SIGNAL_LIB_NAME__',synth_config.signal_driving_cell.lib)
+    replace_in_file(top_cons,'__SIGNAL_DRIVE_CELL__',synth_config.signal_driving_cell.name)
+    replace_in_file(top_cons,'__SIGNAL_DRIVE_PIN__',synth_config.signal_driving_cell.output)
+    replace_in_file(top_cons,'__WIRE_LOAD_MODEL__',synth_config.wire_load_model)
+    replace_in_file(top_cons,'__OPERA_CONDITION__',synth_config.opera_condition)
+    replace_in_file(top_cons,'__CLOCK_TREE__BUDGET__',budget)
+
+    replace_in_file(top_cons,'__CLOCKS_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_clk.tcl"))
+    replace_in_file(top_cons,'__RESET_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_rst.tcl"))
+    replace_in_file(top_cons,'__IO_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_io.tcl"))
+
+def gen_env_synth(path,synth_config):
     date=datetime.now().strftime("%Y-%m-%d")
     synth_config.path_root = os.path.join(path.top_path,synth_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
@@ -357,17 +486,9 @@ def gen_cons_synth(synth_config,path):
     top_cons = os.path.join(synth_config.path_root,"scripts",path.top+".tcl")
     synopsys_setup = os.path.join(synth_config.path_root,"work",".synopsys_dc.setup")
     makefile = os.path.join(synth_config.path_root,"Makefile")
-    if os.path.exists(synth_config.path_root):
-        user_input = input(f"Warning: DIR {synth_config.path_root} existed, do you want to clean it and continue?(y/n):").strip().lower()
-        if user_input == "y":
-            shutil.rmtree(synth_config.path_root)
-        elif user_input == "n":
-            error_exit("User terminal script.")
-        else:
-            error_exit("Input error.")
-    for dir in sub_dir:
-        new_dir = os.path.join(synth_config.path_root,dir)
-        os.makedirs(new_dir)
+    if check_dir(synth_config.path_root,sub_dir) == 0:
+        return 0
+
     shutil.copy(synth_cons_temp,top_cons)
     shutil.copy(synopsys_setup_temp,synopsys_setup)
     shutil.copy(makefile_temp,makefile)
@@ -439,126 +560,42 @@ def gen_cons_synth(synth_config,path):
     replace_in_file(top_cons,'__RESET_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_rst.tcl"))
     replace_in_file(top_cons,'__IO_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_io.tcl"))
 
-
-def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
+def gen_env_sim(path,synth_config,sim_config):
     date=datetime.now().strftime("%Y-%m-%d")
     sim_config.path_root = os.path.join(path.top_path,sim_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
     makefile_temp = script_dir + "/templates/simulation/Makefile"
     sub_dir = sim_config.path_sub.split()
     makefile = os.path.join(sim_config.path_root,"Makefile")
-    if os.path.exists(sim_config.path_root):
-        user_input = input(f"Warning: DIR {sim_config.path_root} existed, do you want to clean it and continue?(y/n):").strip().lower()
-        if user_input == "y":
-            shutil.rmtree(sim_config.path_root)
-        elif user_input == "n":
-            error_exit("User terminal script.")
-        else:
-            error_exit("Input error.")
-    for dir in sub_dir:
-        new_dir = os.path.join(sim_config.path_root,dir)
-        os.makedirs(new_dir)
+    if check_dir(sim_config.path_root,sub_dir):
+        return 0
 
     shutil.copy(makefile_temp,makefile)
 
     replace_in_file(makefile,'__TOP__',path.top)
     replace_in_file(makefile,'__DATE__',date)
     replace_in_file(makefile,'__ROOT_PATH__',sim_config.path_root)
+    replace_in_file(makefile,'__POST_SIM_LIB__',os.path.join(path.lib_path,'verilog',sim_config.library.post_sim))
 
-    param_tb = ""
-    matches = re.findall(r'(\w+)\s*=',path.param)
-    param_tb = ','.join([f'.{name}({name})' for name in matches])
+    filelist = "//Src file\n"
+    filelist += '\n'.join([path.rtl_path+ '/'+ rtl_file for rtl_file in path.rtl_list.split()])
+    filelist += '\n'+"\n".join(path.sub_rtl_list_raw.split())
+    filelist += f"\n//Testbench file\n{path.tb_path}/{path.top}_tb.sv"
+    with open(os.path.join(path.top_path,sim_config.path_root,"work","filelist.f"),"w",encoding="utf-8")as f:
+        f.write(filelist)
+    filelist_post = f"//Gate netlist\n{synth_config.path_root}/mapped/{path.top}.v"
+    filelist_post += f"\n//Testbench file\n{path.tb_path}/{path.top}_tb.sv"
+    with open(os.path.join(path.top_path,sim_config.path_root,"work","filelist_post.f"),"w",encoding="utf-8")as f:
+        f.write(filelist_post)
 
-
-    tb = "\n//========================================\n//The time unit and precision"
-    tb += "\n`timescale  1ns/1ps"
-    tb += f"\nmodule {path.top}_tb;"
-    tb += "\n//========================================"
-    tb += f"\n    parameter {path.param};"
-    for name,row_data in clock_dict.items():
-        if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
-            tb += f"\n    parameter PERIOD_{name.upper()} = {clock_dict[name]['period']};"
-    tb += "\n"+path.port_define
-    tb += "\n    //========================================\n    //Instantiate"
-    tb += f"\n    {path.top} #(\n        {param_tb}\n    ) u_{path.top}(\n        .*\n    );"
-    tb += "\n    //========================================\n    //Clock drive"
-    tb += "\n    initial begin"
-    for name,row_data in clock_dict.items():
-        if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
-            tb += f"\n        {name} = '0;\n        forever #(PERIOD_{name.upper()}/2) {name}= ~{name};"
-    tb += "\n    end"
-    tb += "\n    //========================================\n    //Task reset"
-    rst_list = ""
-    for reset,row_data in rst_dict.items():
-        tb += f"\n    task task_rst_{reset};"
-        rst_list += f"        task_rst_{reset};\n"
-        if "neg" in rst_dict[reset]['edge']:
-            tb += f"\n        {reset} = '0;#1;"
-            tb += f"\n        {reset} = '1;#1;"
-        elif "pos" in rst_dict[reset]['edge']:
-            tb += f"\n        {reset} = '1;#1;"
-            tb += f"\n        {reset} = '0;#1;"
-        else:
-            error_exit(f"Can not capture value of reset {reset}")
-        tb += f"\n    endtask"
-    tb += "\n    //========================================\n    //Task initial"
-    tb += "\n    task task_init;"
-    for pin,row_data in io_dict.items():
-        if "in" in io_dict[pin]['direction']:
-            tb += f"\n        {pin} = '0;"
-    tb += f"\n        #5;"
-    tb += "\n    endtask;"
-    tb += "\n    //========================================\n    //Simulation"
-    tb += "\n    initial begin"
-    tb += "\n        //Reset&Init"
-    tb += "\n        task_init;"
-    tb += f"\n{rst_list}"
-    tb += "\n        //Simulation behavior\n\n\n"
-    tb += "\n        #400;"
-    tb += "\n        $display(\"\\033[31;5m 仿真完成! \\033[0m\",`__FILE__,`__LINE__);"
-    tb += "\n        $finish;"
-    tb += "\n    end"
-    tb += "\n    //========================================\n    //VCS Simulation"
-    tb += "\n    `ifdef VCS_SIM"
-    tb += "\n        //VCS系统函数"
-    tb += "\n        initial begin"
-    tb += "\n            $vcdpluson(); //打开VCD+文件记录"
-    tb += f"\n            $fsdbDumpfile(\"{os.path.join(path.top_path,sim_config.path_root)}/sim/Edge_Detect.fsdb\"); //生成fsdb"
-    tb += "\n            $fsdbDumpvars(\"+all\");"
-    tb += "\n            $vcdplusmemon(); //查看多维数组"
-    tb += "\n        end"
-    tb += "\n        //后仿真"
-    tb += "\n        `ifdef POST_SIM"
-    tb += "\n        //back annotate the SDF file"
-    tb += "\n        initial begin"
-    tb += f"\n            $sdf_annotate(\"{os.path.join(path.top_path,synth_config.path_root,'mapped',path.top+'.sdf')}\","
-    tb += f"\n                          {path.top}.u_{path.top},,,"
-    tb += f"\n                          \"TYPICAL\","
-    tb += f"\n                          \"1:1:1\","
-    tb += f"\n                          \"FROM_MTM\");"
-    tb += "\n            $display(\"\\033[31;5m back annotate \033[0m\",`__FILE__,`__LINE__);"
-    tb += "\n        end"
-    tb += "\n        `endif"
-    tb += "\n    `endif"
-    tb += "\nendmodule"
-
-    filelist = '\n'.join([path.rtl_path+ '/'+ rtl_file for rtl_file in path.rtl_list.split()])
-    #rtl_list = path.rtl_list.split()
-    #for rtl_file in rtl_list:
-    #    filelist += f"{path.rtl_path}/{rtl_file}\n"
-    filelist += "\n".join(path.sub_rtl_list.split())
-    filelist += f"\n{path.tb_path}/{path.top}_tb.sv"
-    print(filelist)
-    return tb,filelist
-
-def gen_cons_clk(clock_dict):
+def gen_cons_clk(path,clock_dict):
     cons = "\n#========================================\n#Clock Constraint"
     if not clock_dict:
-        print("No clock data found.")
+        print_info("No clock data found.")
         return
-    
-    print(f"Starting to generate CMS clock constraints for {len(clock_dict)} clocks.")
-    print("-"*20)
+
+    print_info("-"*40)
+    print_info(f"Starting to generate CMS clock constraints for {len(clock_dict)} clocks.")
 
     for name,row_data in clock_dict.items():
         cons += f"\n#Clock {name} - {row_data['comment']}"
@@ -578,14 +615,16 @@ def gen_cons_clk(clock_dict):
                 cons += f"\nset_ideal_network [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_dont_touch_network [get_{pin_or_port} {clock_dict[name]['root']}]"
                 cons += f"\nset_drive 0 [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_uncertainty  -setup $SETUP_UNCERTAINTY [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_uncertainty  -hold $HOLD_UNCERTAINTY [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_transition  -max $ct_budget({clock_dict[name]['type']}.trans.max) [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_transition  -min $ct_budget({clock_dict[name]['type']}.trans.min) [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_latency -source -max $ct_budget({clock_dict[name]['type']}.source_latency.max) [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_latency -source -min $ct_budget({clock_dict[name]['type']}.source_latency.min) [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_latency -max $ct_budget({clock_dict[name]['type']}.network_latency.max) [get_{pin_or_port} {clock_dict[name]['root']}]"
-                cons += f"\nset_clock_latency -min $ct_budget({clock_dict[name]['type']}.network_latency.min) [get_{pin_or_port} {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_uncertainty  -setup $SETUP_UNCERTAINTY [get_clocks {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_uncertainty  -hold $HOLD_UNCERTAINTY [get_clocks {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_transition  -max $ct_budget({clock_dict[name]['type']}.trans.max) [get_clocks {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_transition  -min $ct_budget({clock_dict[name]['type']}.trans.min) [get_clocks {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_latency -source -max $ct_budget({clock_dict[name]['type']}.source_latency.max) [get_clocks {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_latency -source -min $ct_budget({clock_dict[name]['type']}.source_latency.min) [get_clocks {clock_dict[name]['root']}]"
+                cons += f"\nset_clock_latency -max $ct_budget({clock_dict[name]['type']}.network_latency.max) [get_clocks {clock_dict[name]['root']}]"
+                cons += f"\nif {{$ct_budget({clock_dict[name]['type']}.network_latency.min) ne \"NA\"}} {{"
+                cons += f"\n    set_clock_latency -min $ct_budget({clock_dict[name]['type']}.network_latency.min) [get_clocks {clock_dict[name]['root']}]"
+                cons += f"\n}}"
             else:
                 #mst_clk = 
                 mst_source = clock_dict[clock_dict[name]['master']]['root']
@@ -602,17 +641,19 @@ def gen_cons_clk(clock_dict):
                 cons += f"\ncreate_generated_clock -name {name} {generated_period} -source {mst_source} [get_{pin_or_port} {clock_dict[name]['root']}]" 
     cons += f"\n#----------------------------------------\n#Set var"
 
-    return cons
+    with open(os.path.join(path.cons_path,path.top+"_clk.tcl"),"w",encoding="utf-8")as f:
+        f.write(cons)
 
 
-def gen_cons_rst(rst_dict,clock_dict):
+def gen_cons_rst(path,rst_dict,clock_dict):
     cons = "\n#========================================\n#Reset Constraint"
     if not rst_dict:
-        print("No Reset data found.")
+        print_info("No Reset data found.")
         return
-    
-    print(f"Starting to generate CMS Reset constraints for {len(rst_dict)} reset.")
-    print("-"*20)
+
+    print_info("-"*40)
+    print_info(f"Starting to generate CMS Reset constraints for {len(rst_dict)} reset.")
+
     
     for reset,row_data in rst_dict.items():
         cons += f"\nset_ideal_network [get_port {reset}]"
@@ -620,18 +661,20 @@ def gen_cons_rst(rst_dict,clock_dict):
         cons += f"\nset_drive 0 [get_port {reset}]"
         cons += f"\nset_false_path -from [get_port {reset}]"
     
-    return cons
+    with open(os.path.join(path.cons_path,path.top+"_rst.tcl"),"w",encoding="utf-8")as f:
+        f.write(cons)
 
-def gen_cons_io(io_dict,clock_dict):
+def gen_cons_io(path,io_dict,clock_dict):
     input_ports_except_clk = ""
     output_ports_except_clk = ""
     cons = "\n#========================================\n#IO Constraint"
     if not io_dict:
-        print("No IO data found.")
+        print_info("No IO data found.")
         return
     
-    print(f"Starting to generate CMS IO constraints for {len(io_dict)} pins.")
-    print("-"*20)
+    print_info("-"*40)
+    print_info(f"Starting to generate CMS IO constraints for {len(io_dict)} pins.")
+
     #for row in enumerate(clock_list,start=1):
     for pin,row_data in io_dict.items():
         if io_dict[pin]['direction'] in ("input","in"):
@@ -665,47 +708,170 @@ def gen_cons_io(io_dict,clock_dict):
     cons += "\n"
     cons += "\n#----------------------------------------\n#Set false path"
     cons += "\nset_false_path -from ${NON_CLK_INPUT_PORTS} -thr ${NON_CLK_OUTPUT_PORTS}"
-    return cons
+    with open(os.path.join(path.cons_path,path.top+"_io.tcl"),"w",encoding="utf-8")as f:
+        f.write(cons)
+
+def gen_cn(clock_dict,rst_dict,io_dict,path,sg_config):
+    date=datetime.now().strftime("%Y-%m-%d")
+    awl = f"#{date}\n#========================================\n#Waiver"
+    awl += f"\nwaive -du {{  {{{path.top}}}  }}  -msg {{\'timeunit\' construct is not synthesizable. Ignoring for synthesis}}  -rule {{  {{SYNTH_78}}  }}" 
+    awl += f"\nwaive -du {{  {{{path.top}}}  }}  -msg {{\'timeprecision\' construct is not synthesizable. Ignoring for synthesis}}  -rule {{  {{SYNTH_78}}  }}"
+    awl += f"\nwaive -du {{  {{{path.top}}}  }}  -msg {{Delay used without timescale compiler directive}}  -rule {{  {{CheckDelayTimescale-ML}}  }} "
+    sgdc = f"#{date}\n#========================================\n#SGDC"
+    sgdc += f"\ncurrent_design	{path.top}"
+    sgdc += f"\n#Clock"
+    for name,row_data in clock_dict.items():
+        if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
+            sgdc += f"\nclock -name {name} -domain {clock_dict[name]['group']} -edge {{\"0\" \"{clock_dict[name]['period']/2}\"}} -period {clock_dict[name]['period']}"
+    sgdc += f"\n#Reset"
+    for reset,row_data in rst_dict.items():
+        if "neg" in rst_dict[reset]['edge']:
+            sgdc += f"\nreset -name {reset} -{rst_dict[reset]['type']} -value 0"
+        elif "pos" in rst_dict[reset]['edge']:
+            sgdc += f"\nreset -name {reset} -{rst_dict[reset]['type']} -value 1"
+        else:
+            error_exit(f"Can not capture value of reset {reset}")
+    with open(os.path.join(sg_config.path_root,'cn',path.top+".awl"),"w",encoding="utf-8")as f:
+        f.write(awl)
+    with open(os.path.join(sg_config.path_root,'cn',path.top+".sgdc"),"w",encoding="utf-8")as f:
+        f.write(sgdc)
+
+def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
+    date=datetime.now().strftime("%Y-%m-%d")
+
+    matches = re.findall(r'(\w+)\s*=',path.param)
+    param_tb = ','.join([f'.{name}({name})' for name in matches])
+    param_netlist = re.sub(r'\s*,\s*','_',path.param)
+    param_netlist = re.sub(r'[^\w]','',param_netlist)
+
+
+    tb = f"//{date}\n//========================================\n//The time unit and precision"
+    tb += "\n`timescale  1ns/1ps"
+    tb += f"\nmodule {path.top}_tb;"
+    tb += "\n//========================================"
+    tb += f"\n    parameter {path.param};"
+    for name,row_data in clock_dict.items():
+        if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
+            tb += f"\n    parameter PERIOD_{name.upper()} = {clock_dict[name]['period']};"
+    tb += "\n"+path.port_define
+    tb += "\n    //========================================\n    //Instantiate"
+    tb += f"\n    `ifdef POST_SIM"
+    tb += f"\n        {path.top}_{param_netlist} u_{path.top}(.*);"
+    tb += f"\n    `else"
+    tb += f"\n        {path.top} #(\n            {param_tb}\n        ) u_{path.top}(.*);"
+    tb += f"\n    `endif"
+    tb += "\n    //========================================\n    //Clock drive"
+    tb += "\n    initial begin"
+    for name,row_data in clock_dict.items():
+        if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
+            tb += f"\n        {name} = '0;\n        forever #(PERIOD_{name.upper()}/2) {name}= ~{name};"
+    tb += "\n    end"
+    tb += "\n    //========================================\n    //Task reset"
+    rst_list = ""
+    for reset,row_data in rst_dict.items():
+        tb += f"\n    task task_rst_{reset};"
+        rst_list += f"        task_rst_{reset};\n"
+        if "neg" in rst_dict[reset]['edge']:
+            tb += f"\n        {reset} = '0;#1;"
+            tb += f"\n        {reset} = '1;#1;"
+        elif "pos" in rst_dict[reset]['edge']:
+            tb += f"\n        {reset} = '1;#1;"
+            tb += f"\n        {reset} = '0;#1;"
+        else:
+            error_exit(f"Can not capture value of reset {reset}")
+        tb += f"\n    endtask"
+    tb += "\n    //========================================\n    //Task initial"
+    tb += "\n    task task_init;"
+    for pin,row_data in io_dict.items():
+        if "in" in io_dict[pin]['direction']:
+            tb += f"\n        {pin} = '0;"
+    tb += f"\n        #5;"
+    tb += "\n    endtask"
+    tb += "\n    //========================================\n    //Simulation"
+    tb += "\n    initial begin"
+    tb += "\n        //Reset&Init"
+    tb += "\n        task_init;"
+    tb += f"\n{rst_list}"
+    tb += "\n        //Simulation behavior\n\n\n"
+    tb += "\n        #400;"
+    tb += "\n        $display(\"\\033[31;5m 仿真完成! \\033[0m\",`__FILE__,`__LINE__);"
+    tb += "\n        $finish;"
+    tb += "\n    end"
+    tb += "\n    //========================================\n    //VCS Simulation"
+    tb += "\n    `ifdef VCS_SIM"
+    tb += "\n        //VCS系统函数"
+    tb += "\n        initial begin"
+    tb += "\n            $vcdpluson(); //打开VCD+文件记录"
+    tb += f"\n            $fsdbDumpfile(\"{os.path.join(path.top_path,sim_config.path_root)}/sim/{path.top}.fsdb\"); //生成fsdb"
+    tb += "\n            $fsdbDumpvars(\"+all\");"
+    tb += "\n            $vcdplusmemon(); //查看多维数组"
+    tb += "\n        end"
+    tb += "\n        //后仿真"
+    tb += "\n        `ifdef POST_SIM"
+    tb += "\n        //back annotate the SDF file"
+    tb += "\n        initial begin"
+    tb += f"\n            $sdf_annotate(\"{os.path.join(path.top_path,synth_config.path_root,'mapped',path.top+'.sdf')}\","
+    tb += f"\n                          {path.top}_tb.u_{path.top},,,"
+    tb += f"\n                          \"TYPICAL\","
+    tb += f"\n                          \"1:1:1\","
+    tb += f"\n                          \"FROM_MTM\");"
+    tb += "\n            $display(\"\\033[31;5m back annotate \033[0m\",`__FILE__,`__LINE__);"
+    tb += "\n        end"
+    tb += "\n        `endif"
+    tb += "\n    `endif"
+    tb += "\nendmodule"
+    with open(os.path.join(path.tb_path,path.top+"_tb.sv"),"w",encoding="utf-8")as f:
+        f.write(tb)
 
 def main(filename):
-    cons = ""
     wb = openpyxl.load_workbook(filename)
 
     if 'path' in wb.sheetnames:
+        print_info("-"*40)
+        print_info("Start processing path")
         path = parse_path(wb['path'])
-    if 'pt' in wb.sheetnames:
-        pt_config = parse_config(wb['pt'])
-        #cons_pt = gen_cons_pt(pt_config,design)
+    else:
+        error_exit(f"Can not find \"path\" sheet in {filename}")
+    if 'clock' in wb.sheetnames:
+        print_info("-"*40)
+        print_info("Start processing clock")
+        clock_dict = parse_clock(wb['clock'])
+        gen_cons_clk(path,clock_dict)
+    else:
+        error_exit(f"Can not find \"clock\" sheet in {filename}")
+    if 'reset' in wb.sheetnames:
+        print_info("-"*40)
+        print_info("Start processing reset")
+        rst_dict = parse_rst(wb['reset'])
+        gen_cons_rst(path,rst_dict,clock_dict)
+    if 'io' in wb.sheetnames:
+        print_info("-"*40)
+        print_info("Start processing io")
+        io_dict = parse_io(wb['io'])
+        gen_cons_io(path,io_dict,clock_dict)
+    if 'spyglass'in wb.sheetnames:
+        print_info("-"*40)
+        print_info("Start processing spyglass")
+        sg_config = parse_config(wb['spyglass'])
+        gen_env_sg(path,sg_config)
+        gen_cn(clock_dict,rst_dict,io_dict,path,sg_config)
     if 'synth' in wb.sheetnames:
         synth_config = parse_config(wb['synth'])
-        cons_synth = gen_cons_synth(synth_config,path)
-    if 'clock' in wb.sheetnames:
-        clock_dict = parse_clock(wb['clock'])
-        #print (clock_list)
-        cons_clk = gen_cons_clk(clock_dict)
-    if 'reset' in wb.sheetnames:
-        rst_dict = parse_rst(wb['reset'])
-        cons_rst = gen_cons_rst(rst_dict,clock_dict)
-    if 'io' in wb.sheetnames:
-        io_dict = parse_io(wb['io'])
-        #print (io_list)
-        cons_io = gen_cons_io(io_dict,clock_dict)
+        gen_env_synth(path,synth_config)
+    if 'sta' in wb.sheetnames:
+        sta_config = parse_config(wb['sta'])
+        gen_env_sta(path,synth_config,sta_config)
     if 'sim' in wb.sheetnames:
         sim_config = parse_config(wb['sim'])
-        tb,sim_filelist= gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config)
-    #print(pt_config)
-    #print(synth_config)
-    #print(clock_list)
-    with open(os.path.join(path.cons_path,path.top+"_clk.tcl"),"w",encoding="utf-8")as f:
-        f.write(cons_clk)
-    with open(os.path.join(path.cons_path,path.top+"_rst.tcl"),"w",encoding="utf-8")as f:
-        f.write(cons_rst)
-    with open(os.path.join(path.cons_path,path.top+"_io.tcl"),"w",encoding="utf-8")as f:
-        f.write(cons_io)
-    with open(os.path.join(path.tb_path,path.top+"_tb.sv"),"w",encoding="utf-8")as f:
-        f.write(tb)
-    with open(os.path.join(path.top_path,sim_config.path_root,"work","filelist.f"),"w",encoding="utf-8")as f:
-        f.write(sim_filelist)
+        gen_env_sim(path,synth_config,sim_config)
+        gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config)
+
+
+
+    
+
+
+    
 
     #print (cons)
 
@@ -713,11 +879,18 @@ def main(filename):
     wb.close()
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python cms.py <excel_file>")
-        sys.exit(1)
+    #if len(sys.argv) != 2:
+    #    error_exit("Usage: python cms.py <excel_file>")
     
-    table_path = sys.argv[1]
+    if len(sys.argv) > 1 and sys.argv[1].strip():
+        table_path = sys.argv[1].strip()
+    else:
+        xls_files = glob.glob(os.path.join(os.getcwd(),'pms','*.xls*'))
+        if xls_files:
+            table_path = xls_files[0]
+        else:
+            error_exit("Can not find PMS table.")
+
     try:
         result = main(table_path)
     except Exception as e:

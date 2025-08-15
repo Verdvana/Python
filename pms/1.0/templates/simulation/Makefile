@@ -41,7 +41,7 @@ CM_LOG = -cm_log ${ROOT_PATH}/cm/cm.log
 # 后仿真库文件
 #LIB_DIR = 
 #LIB_EXT = +libext+.v
-LIB_FILE = -v lib_file ${ROOT_PATH}/../synthesis/library/verilog/smic18.v
+LIB_FILE = -v lib_file __POST_SIM_LIB__
 
 
 # 指定VPD文件名
