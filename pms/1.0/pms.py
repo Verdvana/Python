@@ -4,6 +4,7 @@ import os
 import glob
 import openpyxl
 import shutil
+import getpass
 from dataclasses import dataclass,field
 from pathlib import Path
 from datetime import datetime
@@ -82,11 +83,28 @@ def replace_in_file(file_path,target,replacement):
         f.seek(0)
         f.write(content.replace(target,replacement))
         f.truncate()
-def print_info(msg):
+def print_pms(msg):
     print(f"[PMS] {msg}")
+def print_info(msg):
+    print_pms(f"   INFO: {msg}")
+def print_warning(msg):
+    print_pms(f"WARNING: {msg}")
+def print_error(msg):
+    print_pms(f"  ERROR: {msg}")
 def error_exit(msg):
-    print(f"[PMS] FATAL：{msg}", file=sys.stderr)
+    print(f"[PMS]   FATAL: {msg}", file=sys.stderr)
     sys.exit(1)
+def print_startup():
+    time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    username=getpass.getuser()
+    version = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
+    print_pms("#"+"="*60)
+    print_pms(f"# PMS Version {version}")
+    print_pms("#"+"-"*60)
+    print_pms(f"# Date:        {time}")
+    print_pms(f"# Owner:       {username}")
+    print_pms("#"+"="*60)
+    print("\n")
 def standardize_list(list):
     if not list:
         return ""
@@ -94,6 +112,7 @@ def standardize_list(list):
         return ""
     return list.replace(","," ").replace(";"," ").replace("\n"," ").replace("\r"," ")
 def check_dir(parent_dir,sub_dir=None):
+    print("")
     if os.path.exists(parent_dir):
         user_input = input(f"[PMS] WARNING: DIR {parent_dir} existed, do you want to clean it and continue?(y/n):").strip().lower()
         if user_input == "y":
@@ -102,10 +121,10 @@ def check_dir(parent_dir,sub_dir=None):
             if sub_dir:
                 for each_sub_dir in sub_dir:
                     os.makedirs(os.path.join(parent_dir,each_sub_dir))
-            print_info(f"WARNING: Clean {parent_dir} sucessful")
+            print_info(f"Clean {parent_dir} sucessfully\n")
             return 1
         elif user_input == "n":
-            print_info(f"WARNING: No change for {parent_dir}")
+            print_info(f"No change for {parent_dir}\n")
             return 0
         else:
             error_exit("Input error.")
@@ -177,6 +196,9 @@ def get_sub_rtl(sheet):
     return sub_path_list,sub_rtl_list,sub_rtl_list_raw
 
 def parse_path(sheet):
+    print_pms("#"+"-"*60)
+    print_pms("# Fetch design and path information")
+    print_pms("#"+"-"*60)
     path=Path()
     path.top = get_top(sheet)
     print_info(f"Design top module: {path.top}")
@@ -184,14 +206,13 @@ def parse_path(sheet):
     print_info(f"Top dir: {path.top_path}")
     path.rtl_path = get_top_rtl_path(path.top_path,sheet)
     path.rtl_list = get_rtl_file(path.rtl_path)
-    print_info(f"RTL files found: {path.rtl_list}")
 
     top_pattern = path.top+"."
     top_match = [item for item in path.rtl_list.split() if top_pattern in item]
     if len(top_match) == 1:
         top_file = top_match[0]
     else:
-        print_info(f"ERROR:Top-level file: {top_match}")
+        print_error(f"Top-level file: {top_match}")
         error_exit("The top-level file is not unique or not found.")
 
     param_lines = []
@@ -216,6 +237,8 @@ def parse_path(sheet):
 
     path.port_define = get_port_define(path.rtl_path+"/"+top_file)
 
+    path.sub_path_list,path.sub_rtl_list,path.sub_rtl_list_raw = get_sub_rtl(sheet)
+    print_info(f"RTL files list: {path.rtl_list} {path.sub_rtl_list}")
 
     path.tb_path = sheet['B4'].value
     path.tb_path = re.sub(r"\$\{top_path\}",path.top_path,path.tb_path,flags=re.IGNORECASE)
@@ -229,15 +252,14 @@ def parse_path(sheet):
     path.lib_path = sheet['B7'].value
     path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
 
-
-    path.sub_path_list,path.sub_rtl_list,path.sub_rtl_list_raw = get_sub_rtl(sheet)
-
-    check_dir(path.cons_path)
-    check_dir(path.tb_path)
+    
 
     return path
 
 def parse_config(sheet):
+    print_pms("#"+"-"*60)
+    print_pms(f"# Fetch configure information for {sheet.title}")
+    print_pms("#"+"-"*60)
     config=Config()
     config.path_root                    = sheet['B2'].value
     config.path_sub                     = standardize_list(sheet['C2'].value)
@@ -307,16 +329,16 @@ def parse_config(sheet):
 
         if config.library.target is None or str(config.library.target).strip() == "":
             error_exit("Not define target library")
-        print(f"Target Library: {config.library.target}")
         config.library.link = config.library.target + " " + config.library.link + " *"
-        print(f"Link Library: {config.library.link}")
         if config.library.symbol is None or str(config.library.symbol).strip() == "":
             error_exit("Not define symbol library")
-        print(f"Symbol Library: {config.library.symbol}")
-        print(f"Synthetic Library: {config.library.synthetic}")
     return config
 
 def parse_clock(sheet):
+    print_pms("#"+"-"*60)
+    print_pms("# Fetch clock infomation")
+    print_pms("#"+"-"*60)
+
     clock_dict  = {}
     row_index   = 4
     columns     = ['level','group','type','period','name','master','jsrc','jmn','jdc','root','comment']
@@ -329,8 +351,14 @@ def parse_clock(sheet):
         if name:
             clock_dict[name] = row_data
         row_index += 1
+    
+    print_info(f"Number of clock is {len(clock_dict)}")
+
     return clock_dict
 def parse_rst(sheet):
+    print_pms("#"+"-"*60)
+    print_pms("# Fetch reset infomation")
+    print_pms("#"+"-"*60)
     rst_dict  = {}
     row_index   = 3
     columns     = ['level','reset','type','edge','clock']
@@ -343,8 +371,12 @@ def parse_rst(sheet):
         if reset:
             rst_dict[reset] = row_data
         row_index += 1
+    print_info(f"Number of reset is {len(rst_dict)}")
     return rst_dict
 def parse_io(sheet):
+    print_pms("#"+"-"*60)
+    print_pms("# Fetch IO infomation")
+    print_pms("#"+"-"*60)
     io_dict     = {}
     row_index   = 4
     columns     = ['level','pin','direction','clock','trans_min','trans_max','delay_min','delay_max','delay_cmd','load_min','load_max']
@@ -357,8 +389,12 @@ def parse_io(sheet):
         if pin:
             io_dict[pin] = row_data
         row_index += 1
+    print_info(f"Number of IO is {len(io_dict)}")
     return io_dict
 def gen_env_sg(path,sg_config):
+    print_pms("#"+"-"*60)
+    print_pms(f"# Generate environment for SPYGLASS.")
+    print_pms("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     sg_config.path_root = os.path.join(path.top_path,sg_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
@@ -368,7 +404,7 @@ def gen_env_sg(path,sg_config):
     makefile = os.path.join(sg_config.path_root,"Makefile")
     sg_cons = os.path.join(sg_config.path_root,'scripts',f"{path.top}.tcl")
     
-    if check_dir(sg_config.path_root) == 0:
+    if check_dir(sg_config.path_root,sub_dir) == 0:
         return 0
     
     shutil.copy(makefile_temp,makefile)
@@ -389,6 +425,9 @@ def gen_env_sg(path,sg_config):
         f.write(filelist)
 
 def gen_env_sta(path,synth_config,sta_config):
+    print_pms("#"+"-"*60)
+    print_pms(f"# Generate environment for STA.")
+    print_pms("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     param_netlist = re.sub(r'\s*,\s*','_',path.param)
     param_netlist = re.sub(r'[^\w]','',param_netlist)
@@ -475,6 +514,9 @@ def gen_env_sta(path,synth_config,sta_config):
     replace_in_file(top_cons,'__IO_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_io.tcl"))
 
 def gen_env_synth(path,synth_config):
+    print_pms("#"+"-"*60)
+    print_pms(f"# Generate environment for SYNTH.")
+    print_pms("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     synth_config.path_root = os.path.join(path.top_path,synth_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
@@ -561,6 +603,9 @@ def gen_env_synth(path,synth_config):
     replace_in_file(top_cons,'__IO_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_io.tcl"))
 
 def gen_env_sim(path,synth_config,sim_config):
+    print_pms("#"+"-"*60)
+    print_pms(f"# Generate environment for SIMULATION.")
+    print_pms("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     sim_config.path_root = os.path.join(path.top_path,sim_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
@@ -589,13 +634,13 @@ def gen_env_sim(path,synth_config,sim_config):
         f.write(filelist_post)
 
 def gen_cons_clk(path,clock_dict):
-    cons = "\n#========================================\n#Clock Constraint"
+    print_pms("#"+"-"*60)
+    print_pms(f"# Generate clock constraints for {len(clock_dict)} clocks.")
+    print_pms("#"+"-"*60)
     if not clock_dict:
-        print_info("No clock data found.")
+        print_pms("No clock data found.")
         return
-
-    print_info("-"*40)
-    print_info(f"Starting to generate CMS clock constraints for {len(clock_dict)} clocks.")
+    cons = "\n#========================================\n#Clock Constraint"
 
     for name,row_data in clock_dict.items():
         cons += f"\n#Clock {name} - {row_data['comment']}"
@@ -646,14 +691,14 @@ def gen_cons_clk(path,clock_dict):
 
 
 def gen_cons_rst(path,rst_dict,clock_dict):
-    cons = "\n#========================================\n#Reset Constraint"
+    print_pms("#"+"-"*60)
+    print_pms(f"# Generate reset constraints for {len(rst_dict)} reset.")
+    print_pms("#"+"-"*60)
     if not rst_dict:
-        print_info("No Reset data found.")
+        print_pms("No Reset data found.")
         return
 
-    print_info("-"*40)
-    print_info(f"Starting to generate CMS Reset constraints for {len(rst_dict)} reset.")
-
+    cons = "\n#========================================\n#Reset Constraint"
     
     for reset,row_data in rst_dict.items():
         cons += f"\nset_ideal_network [get_port {reset}]"
@@ -665,16 +710,16 @@ def gen_cons_rst(path,rst_dict,clock_dict):
         f.write(cons)
 
 def gen_cons_io(path,io_dict,clock_dict):
+    print_pms("#"+"-"*60)
+    print_pms(f"# Generate IO constraints for {len(io_dict)} ports.")
+    print_pms("#"+"-"*60)
+    if not io_dict:
+        print_pms("No IO data found.")
+        return
     input_ports_except_clk = ""
     output_ports_except_clk = ""
     cons = "\n#========================================\n#IO Constraint"
-    if not io_dict:
-        print_info("No IO data found.")
-        return
     
-    print_info("-"*40)
-    print_info(f"Starting to generate CMS IO constraints for {len(io_dict)} pins.")
-
     #for row in enumerate(clock_list,start=1):
     for pin,row_data in io_dict.items():
         if io_dict[pin]['direction'] in ("input","in"):
@@ -712,6 +757,9 @@ def gen_cons_io(path,io_dict,clock_dict):
         f.write(cons)
 
 def gen_cn(clock_dict,rst_dict,io_dict,path,sg_config):
+    print_pms("#"+"-"*60)
+    print_pms(f"# Generate constranit for SPYGLASS.")
+    print_pms("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     awl = f"#{date}\n#========================================\n#Waiver"
     awl += f"\nwaive -du {{  {{{path.top}}}  }}  -msg {{\'timeunit\' construct is not synthesizable. Ignoring for synthesis}}  -rule {{  {{SYNTH_78}}  }}" 
@@ -737,8 +785,12 @@ def gen_cn(clock_dict,rst_dict,io_dict,path,sg_config):
         f.write(sgdc)
 
 def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
+    print_pms("#"+"-"*60)
+    print_pms(f"# Generate testbench for SIMULATION.")
+    print_pms("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
-
+    if check_dir(path.tb_path) == 0:
+        return 0
     matches = re.findall(r'(\w+)\s*=',path.param)
     param_tb = ','.join([f'.{name}({name})' for name in matches])
     param_netlist = re.sub(r'\s*,\s*','_',path.param)
@@ -825,36 +877,34 @@ def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
 
 def main(filename):
     wb = openpyxl.load_workbook(filename)
+    print_startup()
 
     if 'path' in wb.sheetnames:
-        print_info("-"*40)
-        print_info("Start processing path")
         path = parse_path(wb['path'])
     else:
         error_exit(f"Can not find \"path\" sheet in {filename}")
     if 'clock' in wb.sheetnames:
-        print_info("-"*40)
-        print_info("Start processing clock")
         clock_dict = parse_clock(wb['clock'])
-        gen_cons_clk(path,clock_dict)
     else:
         error_exit(f"Can not find \"clock\" sheet in {filename}")
     if 'reset' in wb.sheetnames:
-        print_info("-"*40)
-        print_info("Start processing reset")
         rst_dict = parse_rst(wb['reset'])
-        gen_cons_rst(path,rst_dict,clock_dict)
+    else:
+        error_exit(f"Can not find \"reset\" sheet in {filename}")
     if 'io' in wb.sheetnames:
-        print_info("-"*40)
-        print_info("Start processing io")
         io_dict = parse_io(wb['io'])
+    else:
+        error_exit(f"Can not find \"io\" sheet in {filename}")
+    
+    if check_dir(path.cons_path) == 1:
+        gen_cons_clk(path,clock_dict)
+        gen_cons_rst(path,rst_dict,clock_dict)
         gen_cons_io(path,io_dict,clock_dict)
+
     if 'spyglass'in wb.sheetnames:
-        print_info("-"*40)
-        print_info("Start processing spyglass")
         sg_config = parse_config(wb['spyglass'])
-        gen_env_sg(path,sg_config)
-        gen_cn(clock_dict,rst_dict,io_dict,path,sg_config)
+        if gen_env_sg(path,sg_config) == 0:
+            gen_cn(clock_dict,rst_dict,io_dict,path,sg_config)
     if 'synth' in wb.sheetnames:
         synth_config = parse_config(wb['synth'])
         gen_env_synth(path,synth_config)
@@ -868,14 +918,6 @@ def main(filename):
 
 
 
-    
-
-
-    
-
-    #print (cons)
-
-    
     wb.close()
 
 if __name__ == "__main__":
