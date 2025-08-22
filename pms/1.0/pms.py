@@ -113,21 +113,29 @@ def standardize_list(list):
     return list.replace(","," ").replace(";"," ").replace("\n"," ").replace("\r"," ")
 def check_dir(parent_dir,sub_dir=None):
     print("")
+
     if os.path.exists(parent_dir):
-        user_input = input(f"[PMS] WARNING: DIR {parent_dir} existed, do you want to clean it and continue?(y/n):").strip().lower()
-        if user_input == "y":
-            shutil.rmtree(parent_dir)
-            os.makedirs(parent_dir)
-            if sub_dir:
-                for each_sub_dir in sub_dir:
-                    os.makedirs(os.path.join(parent_dir,each_sub_dir))
-            print_info(f"Clean {parent_dir} sucessfully\n")
-            return 1
-        elif user_input == "n":
-            print_info(f"No change for {parent_dir}\n")
+        if "design/tb" in parent_dir:
+            print_warning("Testbench directory existed, will not change.")
             return 0
         else:
-            error_exit("Input error.")
+            user_input = input(f"[PMS] WARNING: DIR {parent_dir} existed, do you want to clean it and continue?(y/n):").strip().lower()
+            if user_input == "n":
+                print_info(f"No change for {parent_dir}\n")
+                return 0
+            elif user_input == "y":
+                shutil.rmtree(parent_dir)
+            else:
+                error_exit("Input error.")
+
+    
+    os.makedirs(parent_dir)
+    if sub_dir:
+        for each_sub_dir in sub_dir:
+            os.makedirs(os.path.join(parent_dir,each_sub_dir))
+    print_info(f"Create {parent_dir} sucessfully\n")
+    return 1
+
 def get_env_var(var,bak):
     if var in os.environ:
         return os.environ.get(var)
@@ -351,7 +359,6 @@ def parse_clock(sheet):
         if name:
             clock_dict[name] = row_data
         row_index += 1
-    
     print_info(f"Number of clock is {len(clock_dict)}")
 
     return clock_dict
@@ -423,6 +430,7 @@ def gen_env_sg(path,sg_config):
     filelist += '\n'+"\n".join(path.sub_rtl_list_raw.split())
     with open(os.path.join(path.top_path,sg_config.path_root,"work","filelist.f"),"w",encoding="utf-8")as f:
         f.write(filelist)
+    return 1
 
 def gen_env_sta(path,synth_config,sta_config):
     print_pms("#"+"-"*60)
@@ -612,7 +620,7 @@ def gen_env_sim(path,synth_config,sim_config):
     makefile_temp = script_dir + "/templates/simulation/Makefile"
     sub_dir = sim_config.path_sub.split()
     makefile = os.path.join(sim_config.path_root,"Makefile")
-    if check_dir(sim_config.path_root,sub_dir):
+    if check_dir(sim_config.path_root,sub_dir) == 0:
         return 0
 
     shutil.copy(makefile_temp,makefile)
@@ -685,6 +693,19 @@ def gen_cons_clk(path,clock_dict):
                     generated_period = clock_dict[name]['period']
                 cons += f"\ncreate_generated_clock -name {name} {generated_period} -source {mst_source} [get_{pin_or_port} {clock_dict[name]['root']}]" 
     cons += f"\n#----------------------------------------\n#Set var"
+
+    grouped_clks = {}
+    for clk_info in clock_dict.values():
+        group = clk_info['group']
+        name = clk_info['name']
+        grouped_clks.setdefault(group,[]).append(name)
+    
+    cons += "\n#----------------------------------------\n#Set clock groups"
+    cons += "\nset_clock_groups -asynchronous "
+    for group,names in grouped_clks.items():
+        cons += " -group {"
+        cons += f"{' '.join(names)}"
+        cons += "}"
 
     with open(os.path.join(path.cons_path,path.top+"_clk.tcl"),"w",encoding="utf-8")as f:
         f.write(cons)
@@ -791,6 +812,7 @@ def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
     date=datetime.now().strftime("%Y-%m-%d")
     if check_dir(path.tb_path) == 0:
         return 0
+
     matches = re.findall(r'(\w+)\s*=',path.param)
     param_tb = ','.join([f'.{name}({name})' for name in matches])
     param_netlist = re.sub(r'\s*,\s*','_',path.param)
@@ -903,7 +925,7 @@ def main(filename):
 
     if 'spyglass'in wb.sheetnames:
         sg_config = parse_config(wb['spyglass'])
-        if gen_env_sg(path,sg_config) == 0:
+        if gen_env_sg(path,sg_config) == 1:
             gen_cn(clock_dict,rst_dict,io_dict,path,sg_config)
     if 'synth' in wb.sheetnames:
         synth_config = parse_config(wb['synth'])
@@ -913,8 +935,8 @@ def main(filename):
         gen_env_sta(path,synth_config,sta_config)
     if 'sim' in wb.sheetnames:
         sim_config = parse_config(wb['sim'])
-        gen_env_sim(path,synth_config,sim_config)
         gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config)
+        gen_env_sim(path,synth_config,sim_config)
 
 
 

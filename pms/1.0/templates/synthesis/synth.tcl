@@ -84,16 +84,19 @@ set     OPERA_CONDITION     __OPERA_CONDITION__
 # 时钟约束
 #===================================================
 source __CLOCKS_CONSTRAINT__
+#read_sdc __CLOCKS_CONSTRAINT__
 
 #===================================================
 # 复位约束
 #===================================================
 source __RESET_CONSTRAINT__
+#read_sdc __RESET_CONSTRAINT__
 
 #===================================================
 # IO约束
 #===================================================
 source __IO_CONSTRAINT__
+#read_sdc __IO_CONSTRAINT__
 
 # 输出端口插入隔离单元，这里是插入缓存单
 set_isolate_ports   -type   buffer                      [all_outputs]
@@ -201,6 +204,10 @@ set_fix_multiple_port_nets  -all                        -buffer_constants
 set_host_option		-max_cores      8
 
 
+#??
+#set compile_seqmap_propagate_constants true
+#set compile_register_retiming true
+
 # 一次综合
 #compile
 #compile_ultra
@@ -218,6 +225,7 @@ compile		-map_effort high
 #compile		-map_effort hign	-area_effort	high	-boundary_optimization	\
 															-incremental_mapping
 #compile_ultra						-incr
+#compile_ultra						-no_autoungroup -gate_clock -retime
 
 #===================================================
 # 生成后处理文件
@@ -241,9 +249,12 @@ write_sdf				-version 2.1					$MAPPED_PATH/${TOP_MODULE}.sdf
 # report_timing			-delay_type			max
 
 redirect	-tee	-file	${REPORT_PATH}/check_design.rpt			{check_design}
+redirect	-tee	-file	${REPORT_PATH}/report_qor.rpt			{report_qor}
 redirect	-tee	-file	${REPORT_PATH}/check_timing.rpt			{check_timing}
 redirect	-tee	-file	${REPORT_PATH}/report_constraint.rpt	{report_constraint	-all_violators}
 redirect	-tee	-file	${REPORT_PATH}/check_setup.rpt			{report_timing		-delay_type		max}
 redirect	-tee	-file	${REPORT_PATH}/check_hold.rpt			{report_timing		-delay_type		min}
 redirect	-tee	-file	${REPORT_PATH}/report_area.rpt			{report_area}
+redirect	-tee	-file	${REPORT_PATH}/report_power.rpt			{report_power}
+redirect	-tee	-file	${REPORT_PATH}/report_clock.rpt			{report_clock -attributes}
 redirect	-tee	-file	${REPORT_PATH}/report_group.rpt			{report_path_group}

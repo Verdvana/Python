@@ -174,7 +174,7 @@ group_path  -name   in2out      -from   [all_inputs]    -to [all_outputs]
 #set_host_option		-max_cores      8
 
 
-
+update_timing
 
 
 #===================================================
@@ -185,10 +185,19 @@ group_path  -name   in2out      -from   [all_inputs]    -to [all_outputs]
 
 # report_timing			-delay_type			max
 
-#redirect	-tee	-file	${REPORT_PATH}/check_design.rpt			{check_design}
-redirect	-tee	-file	${REPORT_PATH}/check_timing.rpt			{check_timing}
+redirect	-tee	-file	${REPORT_PATH}/report_qor.rpt			{report_qor}
+
+redirect	-tee	-file	${REPORT_PATH}/clock_skew.rpt			{report_clock_timing -type skew}
+redirect	-tee	-file	${REPORT_PATH}/clock_attr.rpt			{report_clocks -attributes}
+
+foreach view {VIEW_FUNC_MAX VIEW_FUNC_MIN VIEW_SCAN_MAX VIEW_SCAN_MIN} {
+	set_active_analysis_view $view
+	redirect	-tee	-file	${REPORT_PATH}/${view}_paths.rpt	{report_timing -transition_time -nets -capacitance -crpr - input_pins}
+}
+
+
+redirect	-tee	-file	${REPORT_PATH}/check_timing.rpt			{check_timing -verbose}
 redirect	-tee	-file	${REPORT_PATH}/report_constraint.rpt	{report_constraint	-all_violators}
 redirect	-tee	-file	${REPORT_PATH}/check_setup.rpt			{report_timing		-delay_type		max}
 redirect	-tee	-file	${REPORT_PATH}/check_hold.rpt			{report_timing		-delay_type		min}
-#redirect	-tee	-file	${REPORT_PATH}/report_area.rpt			{report_area}
 redirect	-tee	-file	${REPORT_PATH}/report_group.rpt			{report_path_group}
