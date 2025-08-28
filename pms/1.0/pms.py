@@ -5,9 +5,10 @@ import glob
 import openpyxl
 import shutil
 import getpass
-from dataclasses import dataclass,field
+from dataclasses import dataclass,field,fields
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 
 #============================================================
 # Define data class
@@ -83,28 +84,28 @@ def replace_in_file(file_path,target,replacement):
         f.seek(0)
         f.write(content.replace(target,replacement))
         f.truncate()
-def print_pms(msg):
+def pms_msg(msg):
     print(f"[PMS] {msg}")
-def print_info(msg):
-    print_pms(f"   INFO: {msg}")
-def print_warning(msg):
-    print_pms(f"WARNING: {msg}")
-def print_error(msg):
-    print_pms(f"  ERROR: {msg}")
-def error_exit(msg):
+def pms_info(msg):
+    pms_msg(f"   INFO: {msg}")
+def pms_warning(msg):
+    pms_msg(f"WARNING: {msg}")
+def pms_error(msg):
+    pms_msg(f"  ERROR: {msg}")
+def pms_fatal(msg):
     print(f"[PMS]   FATAL: {msg}", file=sys.stderr)
     sys.exit(1)
 def print_startup():
     time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     username=getpass.getuser()
     version = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
-    print_pms("#"+"="*60)
-    print_pms(f"# PMS Version {version}")
-    print_pms("#"+"-"*60)
-    print_pms(f"# Date:        {time}")
-    print_pms(f"# Owner:       {username}")
-    print_pms("#"+"="*60)
-    print("\n")
+    pms_msg("#"+"="*60)
+    pms_msg(f"# PMS Version {version}")
+    pms_msg("#"+"-"*60)
+    pms_msg(f"# Date:        {time}")
+    pms_msg(f"# Owner:       {username}")
+    pms_msg("#"+"="*60)
+    print()
 def standardize_list(list):
     if not list:
         return ""
@@ -116,24 +117,24 @@ def check_dir(parent_dir,sub_dir=None):
 
     if os.path.exists(parent_dir):
         if "design/tb" in parent_dir:
-            print_warning("Testbench directory existed, will not change.")
+            pms_warning("Testbench directory existed, will not change.")
             return 0
         else:
             user_input = input(f"[PMS] WARNING: DIR {parent_dir} existed, do you want to clean it and continue?(y/n):").strip().lower()
             if user_input == "n":
-                print_info(f"No change for {parent_dir}\n")
+                pms_info(f"No change for {parent_dir}\n")
                 return 0
             elif user_input == "y":
                 shutil.rmtree(parent_dir)
             else:
-                error_exit("Input error.")
+                pms_fatal("Input error.")
 
     
     os.makedirs(parent_dir)
     if sub_dir:
         for each_sub_dir in sub_dir:
             os.makedirs(os.path.join(parent_dir,each_sub_dir))
-    print_info(f"Create {parent_dir} sucessfully\n")
+    pms_info(f"Create {parent_dir} sucessfully\n")
     return 1
 
 def get_env_var(var,bak):
@@ -147,7 +148,7 @@ def get_rtl_file(path):
     for pattern in rtl_pattern:
         rtl_list.extend(glob.glob(os.path.join(path, pattern)))
     if not rtl_list:
-        error_exit(f"Not find RTL files in {path} with pattern {rtl_pattern}")
+        pms_fatal(f"Not find RTL files in {path} with pattern {rtl_pattern}")
     rtl_list = " ".join(os.path.basename(f) for f in rtl_list)
     return rtl_list
 def get_port_define(rtl_file):
@@ -157,7 +158,7 @@ def get_port_define(rtl_file):
     content = re.sub(r'\/\/.*','',content)
     match = re.search(r'module\s+\w+\s*(?:#\s*\(.*?\)\s*)?\((.*?)\);\s*',content,re.DOTALL)
     if not match:
-        error_exit("Can not find port define")
+        pms_fatal("Can not find port define")
     raw_port_define = match.group(1)
     port2logic = re.sub(r'\b(input\s+wire|output\s+reg|output\s+logic|output\s+wire|input|output|inout|reg|wire)\b','logic',raw_port_define)
     port2logic = re.sub(r'\blogic\s+logic\b','logic',port2logic)
@@ -169,13 +170,13 @@ def get_port_define(rtl_file):
 def get_top(sheet):
     top = sheet['B1'].value
     if top is None or str(top).strip() == "":
-        error_exit("Not define top module.")
+        pms_fatal("Not define top module.")
     return top
 def get_top_path(top,sheet):
     top_path = get_env_var(top,sheet['B2'].value)
     top_path = re.sub(r"\$\{top\}",top,top_path,flags=re.IGNORECASE)
     if top_path is None:
-        error_exit("Error: Not define design path")
+        pms_fatal("Error: Not define design path")
     return top_path
 def get_top_rtl_path(top_path,sheet):
     top_rtl_path = sheet['B3'].value
@@ -194,8 +195,9 @@ def get_sub_rtl(sheet):
         sub_sheet = openpyxl.load_workbook(os.path.join(sub_path,"pms",row[0]+".xlsx"))['path']
         sub_top_path = get_top_rtl_path(get_top_path(get_top(sub_sheet),sub_sheet),sub_sheet)
         sub_path_list += f" {sub_top_path}"
-        sub_rtl_list += " " + get_rtl_file(sub_top_path)
-        sub_rtl_list_raw += ' '.join([sub_top_path+'/'+rtl_name for rtl_name in sub_rtl_list.split()])
+        sub_rtl_list_current = get_rtl_file(sub_top_path)
+        sub_rtl_list += " " + sub_rtl_list_current
+        sub_rtl_list_raw += ' '+' '.join([sub_top_path+'/'+rtl_name for rtl_name in sub_rtl_list_current.split()])
         sub_sub_path_list,sub_sub_rtl_list,sub_sub_rtl_list_raw = get_sub_rtl(sub_sheet)
         sub_path_list += sub_sub_path_list
         sub_rtl_list += sub_sub_rtl_list
@@ -204,14 +206,14 @@ def get_sub_rtl(sheet):
     return sub_path_list,sub_rtl_list,sub_rtl_list_raw
 
 def parse_path(sheet):
-    print_pms("#"+"-"*60)
-    print_pms("# Fetch design and path information")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg("# Fetch design and path information")
+    pms_msg("#"+"-"*60)
     path=Path()
     path.top = get_top(sheet)
-    print_info(f"Design top module: {path.top}")
+    pms_info(f"Design top module: {path.top}")
     path.top_path = get_top_path(path.top,sheet)
-    print_info(f"Top dir: {path.top_path}")
+    pms_info(f"Top dir: {path.top_path}")
     path.rtl_path = get_top_rtl_path(path.top_path,sheet)
     path.rtl_list = get_rtl_file(path.rtl_path)
 
@@ -220,8 +222,8 @@ def parse_path(sheet):
     if len(top_match) == 1:
         top_file = top_match[0]
     else:
-        print_error(f"Top-level file: {top_match}")
-        error_exit("The top-level file is not unique or not found.")
+        pms_error(f"Top-level file: {top_match}")
+        pms_fatal("The top-level file is not unique or not found.")
 
     param_lines = []
     found_param = False
@@ -230,6 +232,7 @@ def parse_path(sheet):
             stripped = line.strip()
             if stripped.startswith("//"):
                 continue
+            stripped = stripped.split('//')[0].rstrip()
             if not found_param:
                 if "parameter" in stripped:
                     found_param = True
@@ -238,15 +241,17 @@ def parse_path(sheet):
                 param_lines.append(stripped)
                 if ")" in stripped:
                     break
+
     path.param = " ".join(param_lines).replace("\n"," ").replace("\r"," ")
     path.param = path.param[len("parameter"):].lstrip()
     path.param = path.param.split(")")[0].rstrip()
-    print_info(f"Parameter of top design: {path.param}")
+    pms_info(f"Parameter of top design: {path.param}")
 
     path.port_define = get_port_define(path.rtl_path+"/"+top_file)
 
     path.sub_path_list,path.sub_rtl_list,path.sub_rtl_list_raw = get_sub_rtl(sheet)
-    print_info(f"RTL files list: {path.rtl_list} {path.sub_rtl_list}")
+    print(path.sub_path_list,path.sub_rtl_list,path.sub_rtl_list_raw)
+    pms_info(f"RTL files list: {path.rtl_list} {path.sub_rtl_list}")
 
     path.tb_path = sheet['B4'].value
     path.tb_path = re.sub(r"\$\{top_path\}",path.top_path,path.tb_path,flags=re.IGNORECASE)
@@ -260,14 +265,16 @@ def parse_path(sheet):
     path.lib_path = sheet['B7'].value
     path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
 
-    
+    pms_info(f"Memory dir: {path.mem_path}")
+    pms_info(f"Library dir: {path.lib_path}")
+    print()
 
     return path
 
 def parse_config(sheet):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Fetch configure information for {sheet.title}")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg(f"# Fetch configure information for {sheet.title}")
+    pms_msg("#"+"-"*60)
     config=Config()
     config.path_root                    = sheet['B2'].value
     config.path_sub                     = standardize_list(sheet['C2'].value)
@@ -336,36 +343,46 @@ def parse_config(sheet):
         config.ct.raw.noise                 = sheet['I28'].value
 
         if config.library.target is None or str(config.library.target).strip() == "":
-            error_exit("Not define target library")
+            pms_fatal("Not define target library")
         config.library.link = config.library.target + " " + config.library.link + " *"
         if config.library.symbol is None or str(config.library.symbol).strip() == "":
-            error_exit("Not define symbol library")
+            pms_fatal("Not define symbol library")
+    for field in fields(config):
+        value = getattr(config,field.name)
+        pms_info(f"{field.name}: {value}")
     return config
 
 def parse_clock(sheet):
-    print_pms("#"+"-"*60)
-    print_pms("# Fetch clock infomation")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg("# Fetch clock infomation")
+    pms_msg("#"+"-"*60)
 
     clock_dict  = {}
     row_index   = 4
-    columns     = ['level','group','type','period','name','master','jsrc','jmn','jdc','root','comment']
+    columns     = ['level','group','type','period','name','master','jsrc','jmn','jdc','root','add','comment']
     while True:
         row = [cell.value for cell in sheet[row_index]]
         if row[0] is None:
             break
-        row_data = dict(zip(columns,row[:11]))
-        name = row_data['name']
-        if name:
-            clock_dict[name] = row_data
-        row_index += 1
-    print_info(f"Number of clock is {len(clock_dict)}")
+        else:
+            row_index += 1
+            if re.match(r'^#',row[0]):
+                continue
+            else:
+                row_data = dict(zip(columns,row[:12]))
+                name = row_data['name']
+                if name:
+                    clock_dict[name] = row_data
+        
+    pms_info(f"Number of clock is {len(clock_dict)}")
+    for key,value in clock_dict.items():
+        pms_info(f"{key}: {value}")
 
     return clock_dict
 def parse_rst(sheet):
-    print_pms("#"+"-"*60)
-    print_pms("# Fetch reset infomation")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg("# Fetch reset infomation")
+    pms_msg("#"+"-"*60)
     rst_dict  = {}
     row_index   = 3
     columns     = ['level','reset','type','edge','clock']
@@ -373,17 +390,24 @@ def parse_rst(sheet):
         row = [cell.value for cell in sheet[row_index]]
         if row[0] is None:
             break
-        row_data = dict(zip(columns,row[:5]))
-        reset = row_data['reset']
-        if reset:
-            rst_dict[reset] = row_data
-        row_index += 1
-    print_info(f"Number of reset is {len(rst_dict)}")
+        else:
+            row_index += 1
+            if re.match(r'^#',row[0]):
+                continue
+            else:
+                row_data = dict(zip(columns,row[:5]))
+                reset = row_data['reset']
+                if reset:
+                    rst_dict[reset] = row_data
+
+    pms_info(f"Number of reset is {len(rst_dict)}")
+    for key,value in rst_dict.items():
+        pms_info(f"{key}: {value}")
     return rst_dict
 def parse_io(sheet):
-    print_pms("#"+"-"*60)
-    print_pms("# Fetch IO infomation")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg("# Fetch IO infomation")
+    pms_msg("#"+"-"*60)
     io_dict     = {}
     row_index   = 4
     columns     = ['level','pin','direction','clock','trans_min','trans_max','delay_min','delay_max','delay_cmd','load_min','load_max']
@@ -391,17 +415,24 @@ def parse_io(sheet):
         row = [cell.value for cell in sheet[row_index]]
         if row[0] is None:
             break
-        row_data = dict(zip(columns,row[:11]))
-        pin = row_data['pin']
-        if pin:
-            io_dict[pin] = row_data
-        row_index += 1
-    print_info(f"Number of IO is {len(io_dict)}")
+        else:
+            row_index += 1
+            if re.match(r'^#',row[0]):
+                continue
+            else:
+                row_data = dict(zip(columns,row[:11]))
+                pin = row_data['pin']
+                if pin:
+                    io_dict[pin] = row_data
+
+    pms_info(f"Number of IO is {len(io_dict)}")
+    for key,value in io_dict.items():
+        pms_info(f"{key}: {value}")
     return io_dict
 def gen_env_sg(path,sg_config):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Generate environment for SPYGLASS.")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg(f"# Generate environment for SPYGLASS.")
+    pms_msg("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     sg_config.path_root = os.path.join(path.top_path,sg_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
@@ -428,14 +459,20 @@ def gen_env_sg(path,sg_config):
     filelist = "//Src file\n"
     filelist += '\n'.join([path.rtl_path+ '/'+ rtl_file for rtl_file in path.rtl_list.split()])
     filelist += '\n'+"\n".join(path.sub_rtl_list_raw.split())
+
     with open(os.path.join(path.top_path,sg_config.path_root,"work","filelist.f"),"w",encoding="utf-8")as f:
         f.write(filelist)
+
+    pms_info(f"Please find Makefile in {makefile}")
+    pms_info(f"Please find script in {sg_cons}")
+    pms_info(f"Please find filelist in {os.path.join(path.top_path,sg_config.path_root,'work','filelist.f')}")
     return 1
 
+
 def gen_env_sta(path,synth_config,sta_config):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Generate environment for STA.")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg(f"# Generate environment for STA.")
+    pms_msg("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     param_netlist = re.sub(r'\s*,\s*','_',path.param)
     param_netlist = re.sub(r'[^\w]','',param_netlist)
@@ -522,9 +559,9 @@ def gen_env_sta(path,synth_config,sta_config):
     replace_in_file(top_cons,'__IO_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_io.tcl"))
 
 def gen_env_synth(path,synth_config):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Generate environment for SYNTH.")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg(f"# Generate environment for SYNTH.")
+    pms_msg("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     synth_config.path_root = os.path.join(path.top_path,synth_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
@@ -611,9 +648,9 @@ def gen_env_synth(path,synth_config):
     replace_in_file(top_cons,'__IO_CONSTRAINT__',os.path.join(path.cons_path,path.top+"_io.tcl"))
 
 def gen_env_sim(path,synth_config,sim_config):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Generate environment for SIMULATION.")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg(f"# Generate environment for SIMULATION.")
+    pms_msg("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     sim_config.path_root = os.path.join(path.top_path,sim_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
@@ -642,17 +679,15 @@ def gen_env_sim(path,synth_config,sim_config):
         f.write(filelist_post)
 
 def gen_cons_clk(path,clock_dict):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Generate clock constraints for {len(clock_dict)} clocks.")
-    print_pms("#"+"-"*60)
     if not clock_dict:
-        print_pms("No clock data found.")
+        pms_msg("No clock data found.")
         return
     cons = "\n#========================================\n#Clock Constraint"
 
     for name,row_data in clock_dict.items():
         cons += f"\n#Clock {name} - {row_data['comment']}"
         if clock_dict[name]['root'] is None:
+            # is virtual clock
             cons += f"\n#----------------------------------------\ncreate_clock -name {name} -period {clock_dict[name]['period']}"
         else:
             if "/" in clock_dict[name]['root']:
@@ -661,6 +696,7 @@ def gen_cons_clk(path,clock_dict):
                 pin_or_port = "ports"
             
             if clock_dict[name]['master'] is None:
+                # is master clock
                 cons += f"\nset JITTER [expr {clock_dict[name]['jsrc']} + {clock_dict[name]['jmn']} + {clock_dict[name]['jdc']}]"
                 cons += f"\nset SETUP_UNCERTAINTY [expr $ct_budget({clock_dict[name]['type']}.skew) + $ct_budget({clock_dict[name]['type']}.noise) + $JITTER + ({clock_dict[name]['period']} - $ct_budget({clock_dict[name]['type']}.skew) - $ct_budget({clock_dict[name]['type']}.noise) - $JITTER) * $SETUP_MARGIN]"
                 cons += f"\nset HOLD_UNCERTAINTY [expr $ct_budget({clock_dict[name]['type']}.skew) + $ct_budget({clock_dict[name]['type']}.noise) + $HOLD_MARGIN]"
@@ -679,10 +715,18 @@ def gen_cons_clk(path,clock_dict):
                 cons += f"\n    set_clock_latency -min $ct_budget({clock_dict[name]['type']}.network_latency.min) [get_clocks {clock_dict[name]['root']}]"
                 cons += f"\n}}"
             else:
-                #mst_clk = 
-                mst_source = clock_dict[clock_dict[name]['master']]['root']
+                # is generated clock
+                if clock_dict[name]['master'] in clock_dict:
+                    mst_source = clock_dict[clock_dict[name]['master']]['root']
+                else:
+                    mst_source = clock_dict[name]['master']
+                print("1111")
+
                 if not "/" in mst_source:
                     mst_source = f"[get_port {mst_source}]"
+                else:
+                    mst_source = f"[get_pins {mst_source}]"
+
                 if match := re.match(r"-div\s+(\d+)$",clock_dict[name]['period']):
                     generated_period = f"-divide_by {match.group(1)}"
                 elif match := re.match(r"-multi\s+(\d+)$",clock_dict[name]['period']):
@@ -691,7 +735,14 @@ def gen_cons_clk(path,clock_dict):
                     generated_period = clock_dict[name]['period']
                 else:
                     generated_period = clock_dict[name]['period']
+                
                 cons += f"\ncreate_generated_clock -name {name} {generated_period} -source {mst_source} [get_{pin_or_port} {clock_dict[name]['root']}]" 
+                if  clock_dict[name]['add'] is not None:
+                    if not "/" in clock_dict[name]['add']:
+                        cons += f"\ncreate_generated_clock -name {name} {generated_period} -source {mst_source} -add [get_port {clock_dict[name]['add']}]" 
+                    else:
+                        pms_error(f"Add object is not a port: {clock_dict[name]['add']}")
+
     cons += f"\n#----------------------------------------\n#Set var"
 
     grouped_clks = {}
@@ -707,16 +758,15 @@ def gen_cons_clk(path,clock_dict):
         cons += f"{' '.join(names)}"
         cons += "}"
 
-    with open(os.path.join(path.cons_path,path.top+"_clk.tcl"),"w",encoding="utf-8")as f:
+    cons_file = os.path.join(path.cons_path,path.top+"_clk.tcl")
+    with open(cons_file,"w",encoding="utf-8")as f:
         f.write(cons)
+    pms_info(f"Please find the clock constraint in {cons_file}")
 
 
 def gen_cons_rst(path,rst_dict,clock_dict):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Generate reset constraints for {len(rst_dict)} reset.")
-    print_pms("#"+"-"*60)
     if not rst_dict:
-        print_pms("No Reset data found.")
+        pms_msg("No Reset data found.")
         return
 
     cons = "\n#========================================\n#Reset Constraint"
@@ -727,15 +777,14 @@ def gen_cons_rst(path,rst_dict,clock_dict):
         cons += f"\nset_drive 0 [get_port {reset}]"
         cons += f"\nset_false_path -from [get_port {reset}]"
     
-    with open(os.path.join(path.cons_path,path.top+"_rst.tcl"),"w",encoding="utf-8")as f:
+    cons_file = os.path.join(path.cons_path,path.top+"_rst.tcl")
+    with open(cons_file,"w",encoding="utf-8")as f:
         f.write(cons)
+    pms_info(f"Please find the reset constranit in {cons_file}")
 
 def gen_cons_io(path,io_dict,clock_dict):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Generate IO constraints for {len(io_dict)} ports.")
-    print_pms("#"+"-"*60)
     if not io_dict:
-        print_pms("No IO data found.")
+        pms_msg("No IO data found.")
         return
     input_ports_except_clk = ""
     output_ports_except_clk = ""
@@ -765,6 +814,7 @@ def gen_cons_io(path,io_dict,clock_dict):
             if io_dict[pin]['load_max'] is not None:
                 load = io_dict[pin]['load_max']
                 cons += f"\nset_load -max {load} [get_ports {pin}]"
+
     cons += "\n#----------------------------------------\n#Set var"
     cons += f"\nset NON_CLK_INPUT_PORTS [get_ports -quiet \"{input_ports_except_clk}\"]"
     cons += f"\nset NON_CLK_OUTPUT_PORTS [get_ports -quiet \"{output_ports_except_clk}\"]"
@@ -774,13 +824,27 @@ def gen_cons_io(path,io_dict,clock_dict):
     cons += "\n"
     cons += "\n#----------------------------------------\n#Set false path"
     cons += "\nset_false_path -from ${NON_CLK_INPUT_PORTS} -thr ${NON_CLK_OUTPUT_PORTS}"
-    with open(os.path.join(path.cons_path,path.top+"_io.tcl"),"w",encoding="utf-8")as f:
+
+    cons_file = os.path.join(path.cons_path,path.top+"_io.tcl")
+    with open(cons_file,"w",encoding="utf-8")as f:
         f.write(cons)
+    pms_info(f"Please find the IO constranit in {cons_file}")
+
+def gen_sdc(path,clock_dict,rst_dict,io_dict):
+    pms_msg("#"+"-"*60)
+    pms_msg(f"# Generate SDC")
+    pms_msg("#"+"-"*60)
+    pms_info(f"Generate clock constraints for {len(clock_dict)} clocks.")
+    gen_cons_clk(path,clock_dict)
+    pms_info(f"Generate reset constraints for {len(rst_dict)} resets.")
+    gen_cons_rst(path,rst_dict,clock_dict)
+    pms_info(f"Generate IO constraints for {len(io_dict)} ports.")
+    gen_cons_io(path,io_dict,clock_dict)
 
 def gen_cn(clock_dict,rst_dict,io_dict,path,sg_config):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Generate constranit for SPYGLASS.")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg(f"# Generate constranit for SPYGLASS.")
+    pms_msg("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     awl = f"#{date}\n#========================================\n#Waiver"
     awl += f"\nwaive -du {{  {{{path.top}}}  }}  -msg {{\'timeunit\' construct is not synthesizable. Ignoring for synthesis}}  -rule {{  {{SYNTH_78}}  }}" 
@@ -790,8 +854,21 @@ def gen_cn(clock_dict,rst_dict,io_dict,path,sg_config):
     sgdc += f"\ncurrent_design	{path.top}"
     sgdc += f"\n#Clock"
     for name,row_data in clock_dict.items():
-        if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
-            sgdc += f"\nclock -name {name} -domain {clock_dict[name]['group']} -edge {{\"0\" \"{clock_dict[name]['period']/2}\"}} -period {clock_dict[name]['period']}"
+        #if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
+        if clock_dict[name]['root']:
+            if isinstance(clock_dict[name]['period'],(float,int)):
+                sgdc += f"\nclock -name {name} -domain {clock_dict[name]['group']} -edge {{\"0\" \"{clock_dict[name]['period']/2}\"}} -period {clock_dict[name]['period']}"
+            elif match := re.match(r"-div\S*\s+(\d+)$",clock_dict[name]['period']):
+                generated_period = float(clock_dict[clock_dict[name]['master']]['period']) * float(match.group(1))
+                sgdc += f"\nclock -name {name} -domain {clock_dict[name]['group']} -edge {{\"0\" \"{generated_period/2}\"}} -period {generated_period}"
+            elif match := re.match(r"-multi\s+(\d+)$",clock_dict[name]['period']):
+                generated_period = float(clock_dict[clock_dict[name]['master']]['period']) / (match.group(1))
+                sgdc += f"\nclock -name {name} -domain {clock_dict[name]['group']} -edge {{\"0\" \"{generated_period/2}\"}} -period {generated_period}"
+            elif match := re.match(r"-edges\s+\{\s*\d+\s+\d+\s+\d+\s*\}$",clock_dict[name]['period']):
+                pms_fatal("Please fix script to support constraiting clock with waveform for SGDC")
+            else:
+                pms_fatal(f"Can not capture the type of period for clock: {name}")
+
     sgdc += f"\n#Reset"
     for reset,row_data in rst_dict.items():
         if "neg" in rst_dict[reset]['edge']:
@@ -799,16 +876,18 @@ def gen_cn(clock_dict,rst_dict,io_dict,path,sg_config):
         elif "pos" in rst_dict[reset]['edge']:
             sgdc += f"\nreset -name {reset} -{rst_dict[reset]['type']} -value 1"
         else:
-            error_exit(f"Can not capture value of reset {reset}")
-    with open(os.path.join(sg_config.path_root,'cn',path.top+".awl"),"w",encoding="utf-8")as f:
+            pms_fatal(f"Can not capture value of reset {reset}")
+    with open(os.path.join(sg_config.path_root,'cn',path.top+'.awl'),"w",encoding="utf-8")as f:
         f.write(awl)
-    with open(os.path.join(sg_config.path_root,'cn',path.top+".sgdc"),"w",encoding="utf-8")as f:
+    pms_info(f"Please find awl in {os.path.join(sg_config.path_root,'cn',path.top+'.awl')}")
+    with open(os.path.join(sg_config.path_root,'cn',path.top+'.sgdc'),"w",encoding="utf-8")as f:
         f.write(sgdc)
+    pms_info(f"Please find sgdc in {os.path.join(sg_config.path_root,'cn',path.top+'.sgdc')}")
 
 def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
-    print_pms("#"+"-"*60)
-    print_pms(f"# Generate testbench for SIMULATION.")
-    print_pms("#"+"-"*60)
+    pms_msg("#"+"-"*60)
+    pms_msg(f"# Generate testbench for SIMULATION.")
+    pms_msg("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
     if check_dir(path.tb_path) == 0:
         return 0
@@ -852,7 +931,7 @@ def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
             tb += f"\n        {reset} = '1;#1;"
             tb += f"\n        {reset} = '0;#1;"
         else:
-            error_exit(f"Can not capture value of reset {reset}")
+            pms_fatal(f"Can not capture value of reset {reset}")
         tb += f"\n    endtask"
     tb += "\n    //========================================\n    //Task initial"
     tb += "\n    task task_init;"
@@ -904,24 +983,22 @@ def main(filename):
     if 'path' in wb.sheetnames:
         path = parse_path(wb['path'])
     else:
-        error_exit(f"Can not find \"path\" sheet in {filename}")
+        pms_fatal(f"Can not find \"path\" sheet in {filename}")
     if 'clock' in wb.sheetnames:
         clock_dict = parse_clock(wb['clock'])
     else:
-        error_exit(f"Can not find \"clock\" sheet in {filename}")
+        pms_fatal(f"Can not find \"clock\" sheet in {filename}")
     if 'reset' in wb.sheetnames:
         rst_dict = parse_rst(wb['reset'])
     else:
-        error_exit(f"Can not find \"reset\" sheet in {filename}")
+        pms_fatal(f"Can not find \"reset\" sheet in {filename}")
     if 'io' in wb.sheetnames:
         io_dict = parse_io(wb['io'])
     else:
-        error_exit(f"Can not find \"io\" sheet in {filename}")
+        pms_fatal(f"Can not find \"io\" sheet in {filename}")
     
     if check_dir(path.cons_path) == 1:
-        gen_cons_clk(path,clock_dict)
-        gen_cons_rst(path,rst_dict,clock_dict)
-        gen_cons_io(path,io_dict,clock_dict)
+        gen_sdc(path,clock_dict,rst_dict,io_dict)
 
     if 'spyglass'in wb.sheetnames:
         sg_config = parse_config(wb['spyglass'])
@@ -944,7 +1021,7 @@ def main(filename):
 
 if __name__ == "__main__":
     #if len(sys.argv) != 2:
-    #    error_exit("Usage: python cms.py <excel_file>")
+    #    pms_fatal("Usage: python cms.py <excel_file>")
     
     if len(sys.argv) > 1 and sys.argv[1].strip():
         table_path = sys.argv[1].strip()
@@ -953,7 +1030,7 @@ if __name__ == "__main__":
         if xls_files:
             table_path = xls_files[0]
         else:
-            error_exit("Can not find PMS table.")
+            pms_fatal("Can not find PMS table.")
 
     try:
         result = main(table_path)

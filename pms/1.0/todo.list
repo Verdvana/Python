@@ -1,0 +1,2 @@
+1.where is generated clock defined in divider module? output port or output of register?
+2.should we constriant generated clock in sgdc for spyglass?
