@@ -10,7 +10,6 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-
 #============================================================
 # Define data class
 @dataclass
@@ -21,6 +20,7 @@ class Path:
     rtl_list:str="None"
     tb_path:str="None"
     cons_path:str="None"
+    ip_path:str="None"
     mem_path:str="None"
     param:str="None"
     port_define:str="None"
@@ -187,7 +187,7 @@ def get_sub_rtl(sheet):
     sub_path_list = ""
     sub_rtl_list = ""
     sub_rtl_list_raw = ""
-    row_index   = 10
+    row_index   = 11
     while True:
         row = [cell.value for cell in sheet[row_index]]
         if row[0] is None:
@@ -205,6 +205,8 @@ def get_sub_rtl(sheet):
         sub_rtl_list_raw += sub_sub_rtl_list_raw
         row_index += 1
     return sub_path_list,sub_rtl_list,sub_rtl_list_raw
+def get_mem(sheet):
+    print()
 
 def parse_path(sheet):
     pms_msg("#"+"-"*60)
@@ -251,7 +253,6 @@ def parse_path(sheet):
     path.port_define = get_port_define(path.rtl_path+"/"+top_file)
 
     path.sub_path_list,path.sub_rtl_list,path.sub_rtl_list_raw = get_sub_rtl(sheet)
-    print(path.sub_path_list,path.sub_rtl_list,path.sub_rtl_list_raw)
     pms_info(f"RTL files list: {path.rtl_list} {path.sub_rtl_list}")
 
     path.tb_path = sheet['B4'].value
@@ -260,12 +261,16 @@ def parse_path(sheet):
     path.cons_path = sheet['B5'].value
     path.cons_path = re.sub(r"\$\{top_path\}",path.top_path,path.cons_path,flags=re.IGNORECASE)
 
-    path.mem_path = sheet['B6'].value
+    path.ip_path = sheet['B6'].value
+    path.ip_path = re.sub(r"\$\{top_path\}",path.top_path,path.cons_path,flags=re.IGNORECASE)
+
+    path.mem_path = sheet['B7'].value
     path.mem_path = re.sub(r"\$\{top_path\}",path.top_path,path.mem_path,flags=re.IGNORECASE)
 
-    path.lib_path = sheet['B7'].value
+    path.lib_path = sheet['B8'].value
     path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
 
+    pms_info(f"IP dir: {path.ip_path}")
     pms_info(f"Memory dir: {path.mem_path}")
     pms_info(f"Library dir: {path.lib_path}")
     print()
