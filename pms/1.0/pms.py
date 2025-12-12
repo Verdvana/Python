@@ -205,7 +205,9 @@ def get_sub_rtl(sheet):
         sub_rtl_list_raw += sub_sub_rtl_list_raw
         row_index += 1
     return sub_path_list,sub_rtl_list,sub_rtl_list_raw
-def get_mem(sheet):
+def get_sub_mem(sub_path_list,sheet):
+    if not sub_path_list:
+        return []
     print()
 
 def parse_path(sheet):
