@@ -205,10 +205,48 @@ def get_sub_rtl(sheet):
         sub_rtl_list_raw += sub_sub_rtl_list_raw
         row_index += 1
     return sub_path_list,sub_rtl_list,sub_rtl_list_raw
-def get_sub_mem(sub_path_list,sheet):
-    if not sub_path_list:
+def get_mem(sub_path_list,sheet):
+    if not sub_path_list or sub_path_list.strip() == "":
         return []
-    print()
+    paths = re.split(r"[ \t\r\n]+", sub_path_list.strip())
+    paths = [p for p in paths if p]
+    
+    results = []
+
+    for path in paths:
+        # 退回两级目录并拼接 /pms
+        base_path = os.path.abspath(os.path.join(path, "..", "..", "pms"))
+
+        # 查找 xls/xlsx 文件
+        xls_files = glob.glob(os.path.join(base_path, "*.xls"))
+        xlsx_files = glob.glob(os.path.join(base_path, "*.xlsx"))
+        files = xls_files + xlsx_files
+
+        # 文件数检查
+        if len(files) == 0:
+            raise RuntimeError(f"目录 {base_path} 下未找到任何 xls/xlsx 文件")
+        if len(files) > 1:
+            raise RuntimeError(f"目录 {base_path} 下找到多个 Excel 文件: {files}")
+
+        file_path = files[0]
+
+        # 打开 Excel
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+        if sheet not in wb.sheetnames:
+            raise RuntimeError(f"文件 {file_path} 中未找到 sheet: {sheet}")
+
+        ws = wb[sheet]
+
+        # 从 J2 往下读
+        row = 2
+        while True:
+            value = ws[f"J{row}"].value
+            if value is None:
+                break
+            results.append(value)
+            row += 1
+
+    return results
 
 def parse_path(sheet):
     pms_msg("#"+"-"*60)
