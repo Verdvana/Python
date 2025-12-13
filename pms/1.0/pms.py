@@ -28,6 +28,7 @@ class Path:
     sub_rtl_list:str="None"
     sub_path_list:str="None"
     sub_path_list_raw:str="None"
+    mem_list:str="None"
 @dataclass
 class Range:
     min:str="None"
@@ -205,48 +206,19 @@ def get_sub_rtl(sheet):
         sub_rtl_list_raw += sub_sub_rtl_list_raw
         row_index += 1
     return sub_path_list,sub_rtl_list,sub_rtl_list_raw
-def get_mem(sub_path_list,sheet):
-    if not sub_path_list or sub_path_list.strip() == "":
-        return []
-    paths = re.split(r"[ \t\r\n]+", sub_path_list.strip())
-    paths = [p for p in paths if p]
-    
-    results = []
-
-    for path in paths:
-        # 退回两级目录并拼接 /pms
-        base_path = os.path.abspath(os.path.join(path, "..", "..", "pms"))
-
-        # 查找 xls/xlsx 文件
-        xls_files = glob.glob(os.path.join(base_path, "*.xls"))
-        xlsx_files = glob.glob(os.path.join(base_path, "*.xlsx"))
-        files = xls_files + xlsx_files
-
-        # 文件数检查
-        if len(files) == 0:
-            raise RuntimeError(f"目录 {base_path} 下未找到任何 xls/xlsx 文件")
-        if len(files) > 1:
-            raise RuntimeError(f"目录 {base_path} 下找到多个 Excel 文件: {files}")
-
-        file_path = files[0]
-
-        # 打开 Excel
-        wb = openpyxl.load_workbook(file_path, data_only=True)
-        if sheet not in wb.sheetnames:
-            raise RuntimeError(f"文件 {file_path} 中未找到 sheet: {sheet}")
-
-        ws = wb[sheet]
-
-        # 从 J2 往下读
-        row = 2
-        while True:
-            value = ws[f"J{row}"].value
-            if value is None:
-                break
-            results.append(value)
-            row += 1
-
-    return results
+def get_mem_list(sheet):
+    mem_list = []
+    row_index = 2 
+    while True:
+        cell_value = sheet.cell(row=row_index, column=10).value
+        
+        if cell_value is None or str(cell_value).strip() == "":
+            break
+            
+        mem_list.append(cell_value)
+        row += 1 
+        
+    return mem_list
 
 def parse_path(sheet):
     pms_msg("#"+"-"*60)
@@ -309,6 +281,9 @@ def parse_path(sheet):
 
     path.lib_path = sheet['B8'].value
     path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
+
+    mem_list = get_mem_list(sheet)
+    print(mem_list)
 
     pms_info(f"IP dir: {path.ip_path}")
     pms_info(f"Memory dir: {path.mem_path}")
