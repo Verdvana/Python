@@ -216,7 +216,7 @@ def get_mem_list(sheet):
             break
             
         mem_list.append(cell_value)
-        row += 1 
+        row_index += 1 
 
     return mem_list
 def find_single_excel(path):
@@ -230,7 +230,6 @@ def find_single_excel(path):
     if len(excel_files) != 1:
         pms_fatal(
             f"在路径 {path} 下找到 {len(excel_files)} 个 Excel 文件，"
-            f"期望数量为 1：{excel_files}"
         )
     return excel_files[0]
 def get_all_mem(mem_path,sub_path_list
@@ -308,7 +307,7 @@ def parse_path(sheet):
     path.lib_path = sheet['B8'].value
     path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
 
-    mem_list = get_all_mem(path.mem_path,sub_path_list,sheet)
+    mem_list = get_all_mem(path.mem_path,path.sub_path_list,sheet)
     print(mem_list)
 
     pms_info(f"IP dir: {path.ip_path}")
