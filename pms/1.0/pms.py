@@ -28,7 +28,7 @@ class Path:
     sub_rtl_list:str="None"
     sub_path_list:str="None"
     sub_path_list_raw:str="None"
-    mem_list:str="None"
+    mem_list_raw:str="None"
 @dataclass
 class Range:
     min:str="None"
@@ -237,7 +237,7 @@ def get_all_mem(mem_path,sub_path_list
     mem_list = get_mem_list(sheet)
     path_list = sub_path_list.split()
     if not path_list:
-        return []
+        return mem_list
     for each_path in path_list:
         full_path = os.path.join(each_path, "../../pms")
         print(full_path)
@@ -308,7 +308,20 @@ def parse_path(sheet):
     path.lib_path = re.sub(r"\$\{top_path\}",path.top_path,path.lib_path,flags=re.IGNORECASE)
 
     mem_list = get_all_mem(path.mem_path,path.sub_path_list,sheet)
-    print(mem_list)
+    #path.mem_list_raw = "\n".join(f"{path.mem_path}/{mem_file}/{mem_file}.v" for mem_file in mem_list)
+    if len(mem_list) == 0:
+        path.mem_list_raw = ""
+    else:
+        found_files = []
+        for mem in mem_list:
+            mem_file_path = os.path.join(path.mem_path, mem, f"{mem}.v")
+            if os.path.isfile(mem_file_path):
+                found_files.append(mem_file_path)
+                pms_info(f"Memory rtl found: {mem_file_path}")
+            else:
+                pms_error(f"Memory file not found: {mem_file_path}")
+        path.mem_list_raw = "\n".join(found_files)
+    
 
     pms_info(f"IP dir: {path.ip_path}")
     pms_info(f"Memory dir: {path.mem_path}")
@@ -716,10 +729,12 @@ def gen_env_sim(path,synth_config,sim_config):
     filelist = "//Src file\n"
     filelist += '\n'.join([path.rtl_path+ '/'+ rtl_file for rtl_file in path.rtl_list.split()])
     filelist += '\n'+"\n".join(path.sub_rtl_list_raw.split())
+    filelist += path.mem_list_raw
     filelist += f"\n//Testbench file\n{path.tb_path}/{path.top}_tb.sv"
     with open(os.path.join(path.top_path,sim_config.path_root,"work","filelist.f"),"w",encoding="utf-8")as f:
         f.write(filelist)
     filelist_post = f"//Gate netlist\n{synth_config.path_root}/mapped/{path.top}.v"
+    filelist_post += "\n"+path.mem_list_raw
     filelist_post += f"\n//Testbench file\n{path.tb_path}/{path.top}_tb.sv"
     with open(os.path.join(path.top_path,sim_config.path_root,"work","filelist_post.f"),"w",encoding="utf-8")as f:
         f.write(filelist_post)
