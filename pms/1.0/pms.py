@@ -681,11 +681,13 @@ def gen_env_synth(path,synth_config):
 
     replace_in_file(synopsys_setup,'__ROOT__',path.top_path)
     replace_in_file(synopsys_setup,'__LIB_PATH__',path.lib_path)
+    replace_in_file(synopsys_setup,'__MEM_PATH__',path.mem_path)
     replace_in_file(synopsys_setup,'__RTL_PATH__',path.rtl_path+path.sub_path_list)
     replace_in_file(synopsys_setup,'__TARGET_LIB__',synth_config.library.target)
     replace_in_file(synopsys_setup,'__LINK_LIB__',synth_config.library.link)
     replace_in_file(synopsys_setup,'__SYMBOL_LIB__',synth_config.library.symbol)
     replace_in_file(synopsys_setup,'__SYNTH_LIB__',synth_config.library.synthetic)
+    
     replace_in_file(top_cons,'__DATE__',date)
     replace_in_file(top_cons,'__TOP__',path.top)
     replace_in_file(top_cons,'__TARGET_LIB__',synth_config.library.target)
