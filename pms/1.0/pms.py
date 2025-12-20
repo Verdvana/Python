@@ -315,17 +315,20 @@ def parse_path(sheet):
         path.mem_lib_list = ""
 
     else:
-        found_files = []
+        found_rtl_files = []
+        found_lib_files = []
         for mem in mem_list:
             mem_file_path = os.path.join(path.mem_path, f"{mem}.v")
             if os.path.isfile(mem_file_path):
-                found_files.append(mem_file_path)
+                found_rtl_files.append(mem_file_path)
                 pms_info(f"Memory rtl found: {mem_file_path}")
             else:
                 pms_error(f"Memory file not found: {mem_file_path}")
-            db_files = list(Path(path.mem_path).glob("*.db"))
-            path.mem_lib_list += " "+" ".join(f.name for f in db_files)
-        path.mem_rtl_list_raw = "\n".join(found_files)
+            db_files = glob.glob(os.path.join(path.mem_path, f"{mem}*.lib"))
+            found_lib_files.extend(db_files)
+        path.mem_rtl_list_raw = "\n".join(found_rtl_files)
+        print (found_lib_files)
+        path.mem_lib_list = " ".join(os.path.basename(f) for f in found_lib_files)
     
 
     pms_info(f"IP dir: {path.ip_path}")
