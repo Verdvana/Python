@@ -526,6 +526,7 @@ def gen_env_sg(path,sg_config):
     filelist = "//Src file\n"
     filelist += '\n'.join([path.rtl_path+ '/'+ rtl_file for rtl_file in path.rtl_list.split()])
     filelist += '\n'+"\n".join(path.sub_rtl_list_raw.split())
+    filelist += path.mem_rtl_list_raw
 
     with open(os.path.join(path.top_path,sg_config.path_root,"work","filelist.f"),"w",encoding="utf-8")as f:
         f.write(filelist)
