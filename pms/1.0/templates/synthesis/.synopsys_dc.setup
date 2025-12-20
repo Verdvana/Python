@@ -10,7 +10,9 @@ set SCRIPT_PATH					$ROOT_PATH/synthesis/scirpts
 set MAPPED_PATH					$ROOT_PATH/synthesis/mapped
 set REPORT_PATH					$ROOT_PATH/synthesis/reports
 set UNMAPPED_PATH				$ROOT_PATH/synthesis/unmapped
-set MEM_PATH					__MEM_PATH__
+set SPRAM_PATH					__MEM_PATH__/spram
+set DPRAM_PATH					__MEM_PATH__/dpram
+set ROM_PATH					__MEM_PATH__/rom
 
 
 # 设置工作路径
