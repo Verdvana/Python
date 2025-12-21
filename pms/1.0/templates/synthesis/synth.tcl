@@ -27,7 +27,7 @@ set TOP_MODULE		__TOP__			;# 定义顶层文件名
 #read_sverilog	-rtl	[list	__RTL_LIST__    ]
 
 analyze		-f	sverilog	[list	__RTL_LIST__  ]
-elaborate	$TOP_MODULE	-parameter	" __PARAMETER__  "
+elaborate	$TOP_MODULE	__PARAMETER__ 
 
 #设置顶层文件
 #current_design	$TOP_MODULE

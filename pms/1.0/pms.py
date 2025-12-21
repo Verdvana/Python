@@ -29,7 +29,7 @@ class Path:
     sub_path_list:str="None"
     sub_path_list_raw:str="None"
     mem_rtl_list_raw:str="None"
-    mem_lib_list:str="None"
+    mem_db_list:str="None"
 @dataclass
 class Range:
     min:str="None"
@@ -312,11 +312,11 @@ def parse_path(sheet):
     #path.mem_rtl_list_raw = "\n".join(f"{path.mem_path}/{mem_file}/{mem_file}.v" for mem_file in mem_list)
     if len(mem_list) == 0:
         path.mem_rtl_list_raw = ""
-        path.mem_lib_list = ""
+        path.mem_db_list = ""
 
     else:
         found_rtl_files = []
-        found_lib_files = []
+        found_db_files = []
         for mem in mem_list:
             mem_file_path = os.path.join(path.mem_path, f"{mem}.v")
             if os.path.isfile(mem_file_path):
@@ -324,11 +324,11 @@ def parse_path(sheet):
                 pms_info(f"Memory rtl found: {mem_file_path}")
             else:
                 pms_error(f"Memory file not found: {mem_file_path}")
-            db_files = glob.glob(os.path.join(path.mem_path, f"{mem}*.lib"))
-            found_lib_files.extend(db_files)
+            db_files = glob.glob(os.path.join(path.mem_path, f"{mem}*.db"))
+            found_db_files.extend(db_files)
         path.mem_rtl_list_raw = "\n".join(found_rtl_files)
-        print (found_lib_files)
-        path.mem_lib_list = " ".join(os.path.basename(f) for f in found_lib_files)
+        print (found_db_files)
+        path.mem_db_list = " ".join(os.path.basename(f) for f in found_db_files)
     
 
     pms_info(f"IP dir: {path.ip_path}")
@@ -693,7 +693,7 @@ def gen_env_synth(path,synth_config):
     replace_in_file(synopsys_setup,'__MEM_PATH__',path.mem_path)
     replace_in_file(synopsys_setup,'__RTL_PATH__',path.rtl_path+path.sub_path_list)
     replace_in_file(synopsys_setup,'__TARGET_LIB__',synth_config.library.target)
-    replace_in_file(synopsys_setup,'__LINK_LIB__',path.mem_lib_list + " " + synth_config.library.link)
+    replace_in_file(synopsys_setup,'__LINK_LIB__',path.mem_db_list + " " + synth_config.library.link)
     replace_in_file(synopsys_setup,'__SYMBOL_LIB__',synth_config.library.symbol)
     replace_in_file(synopsys_setup,'__SYNTH_LIB__',synth_config.library.synthetic)
     
@@ -701,7 +701,12 @@ def gen_env_synth(path,synth_config):
     replace_in_file(top_cons,'__TOP__',path.top)
     replace_in_file(top_cons,'__TARGET_LIB__',synth_config.library.target)
     replace_in_file(top_cons,'__RTL_LIST__',path.rtl_list+path.sub_rtl_list)
-    replace_in_file(top_cons,'__PARAMETER__',path.param)
+    if path.param.strip() == "":
+        replace_in_file(top_cons,'__PARAMETER__',path.param)
+    else:
+        replace_in_file(top_cons,'__PARAMETER__',"-parameter " + f"\"path.param\"")
+    print("fffffff")
+    print(path.param)
     replace_in_file(top_cons,'__TARGET_LIB__',synth_config.library.target)
     replace_in_file(top_cons,'__CLOCK_LIB_NAME__',synth_config.clock_driving_cell.lib)
     replace_in_file(top_cons,'__CLOCK_DRIVE_CELL__',synth_config.clock_driving_cell.name)
