@@ -979,7 +979,8 @@ def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
     tb += "\n`timescale  1ns/1ps"
     tb += f"\nmodule {path.top}_tb;"
     tb += "\n    //========================================"
-    tb += f"\n    parameter {path.param};"
+    if path.param.strip() != "":
+        tb += f"\n    parameter {path.param};"
     for name,row_data in clock_dict.items():
         if clock_dict[name]['root'] and "/" not in clock_dict[name]['root']:
             tb += f"\n    parameter PERIOD_{name.upper()} = {clock_dict[name]['period']};"
