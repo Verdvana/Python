@@ -745,7 +745,7 @@ def gen_env_sim(path,synth_config,sim_config):
     filelist = "//Src file\n"
     filelist += '\n'.join([path.rtl_path+ '/'+ rtl_file for rtl_file in path.rtl_list.split()])
     filelist += '\n'+"\n".join(path.sub_rtl_list_raw.split())
-    filelist += path.mem_rtl_list_raw
+    filelist += '\n'+path.mem_rtl_list_raw
     filelist += f"\n//Testbench file\n{path.tb_path}/{path.top}_tb.sv"
     with open(os.path.join(path.top_path,sim_config.path_root,"work","filelist.f"),"w",encoding="utf-8")as f:
         f.write(filelist)
