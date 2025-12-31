@@ -542,8 +542,12 @@ def gen_env_sta(path,synth_config,sta_config):
     pms_msg(f"# Generate environment for STA.")
     pms_msg("#"+"-"*60)
     date=datetime.now().strftime("%Y-%m-%d")
-    param_netlist = re.sub(r'\s*,\s*','_',path.param)
-    param_netlist = re.sub(r'[^\w]','',param_netlist)
+    if path.param.strip() == "":
+        param_netlist = ""
+    else:
+        param_netlist = re.sub(r'\s*,\s*','_',path.param)
+        param_netlist = "_"+re.sub(r'[^\w]','',param_netlist)
+
     sta_config.path_root = os.path.join(path.top_path,sta_config.path_root)
     script_dir=os.path.dirname(os.path.abspath(__file__))
     sta_cons_temp = script_dir + "/templates/sta/sta.tcl"
@@ -987,7 +991,7 @@ def gen_tb(clock_dict,rst_dict,io_dict,path,sim_config,synth_config):
     tb += "\n"+path.port_define
     tb += "\n    //========================================\n    //Instantiate"
     tb += f"\n    `ifdef POST_SIM"
-    tb += f"\n        {path.top}_{param_netlist} u_{path.top}(.*);"
+    tb += f"\n        {path.top}{param_netlist} u_{path.top}(.*);"
     tb += f"\n    `else"
     tb += f"\n        {path.top} #(\n            {param_tb}\n        ) u_{path.top}(.*);"
     tb += f"\n    `endif"
