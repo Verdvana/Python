@@ -13,12 +13,12 @@ from longport.openapi import Config, TradeContext, OrderType, OrderSide, TimeInF
 # ==========================================
 # 1. 配置区
 # ==========================================
-APP_KEY = "1820cfed626d47cb7675f017cb92e3dc"
-APP_SECRET = "19bac0de0c2eaee7f298d55b9a726ea6b513d0793ddd798b30222e43872b05f8"
-ACCESS_TOKEN = "m_eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJsb25nYnJpZGdlIiwic3ViIjoiYWNjZXNzX3Rva2VuIiwiZXhwIjoxNzc4MTM3NzEyLCJpYXQiOjE3NzAzNjE3MTIsImFrIjoiMTgyMGNmZWQ2MjZkNDdjYjc2NzVmMDE3Y2I5MmUzZGMiLCJhYWlkIjoyMTI2NTA3NSwiYWMiOiJsYl9wYXBlcnRyYWRpbmciLCJtaWQiOjE1NzQyMzM4LCJzaWQiOiJQQzM2d0twNU1Ra1pLRm1UemMxNDZBPT0iLCJibCI6MywidWwiOjAsImlrIjoibGJfcGFwZXJ0cmFkaW5nXzIxMjY1MDc1In0.OWsPUu7aNNLITv4kUlDaGD8u9iyUWQOWQKAarZNZvI2I8_T-amiHt4805RaduaFoevJtN_826pBpg0hZYXsf3DGoSlpIr66tMft9P9EOB0zSzoqfNFeEFaaCB1YGIqhsDupIP-9rE5QvOif8yGhhwPhaTPdZzBybaEt9tL5d8jz50Es2_iqN9t2LiayQ4x2nx_6eXjjcFGWMtgMJPF4amf4y7ncWWFr3TUo4KZR9Pd03aQ3QpNJg2GAkmHshL2Om0K3BoEZap0n5uLn8snCwI2BwPZ2XhXz457jND40eVSafp8oYcW2rDBXxQsj6-bWUpOzCRK8C9KSfnYU8FLTxbPmdChWPXXkmhGKN7wbD-RcS39Fo25Tu7AuSXd29uQ0FqqQagUmmb2Xf_2eUFspdrdsG4PucsXVxnUIJSiOvudnNoEXTyxdhKek3B8VI2b0gCtJ5wGBeX46eOBgLPq3dX51ymBZGIpIAO-SnsoqSqaoIK-opfDo8gH_BQ8K7NJUGgRkBC_p0YieFDjnrnydSViMnu9DSaavtFJV3O4klswvh1jZ0YU3wSEeK8vjk130VVLZC1wehBz5QK_5rPKFFoZkmrRm0W3UiBXXrMgCzxT9Sfx5naC4eI2wTnNwGD6Q7lCRX4NAFNP7yeIPBArt2Zwk8vvQXGdCtbEcbivNQFwk" 
+APP_KEY = ""
+APP_SECRET = ""
+ACCESS_TOKEN = "" 
 
 # Finnhub 配置 (去 finnhub.io 注册获取免费 API Key)
-FINNHUB_API_KEY = "d62qoq1r01qnpu82b9kgd62qoq1r01qnpu82b9l0" 
+FINNHUB_API_KEY = "" 
 
 SYMBOL_YF = "DXYZ"
 SYMBOL_LP = "DXYZ.US"
