@@ -1,0 +1,11 @@
+2026-02-09 22:53:32,802 - [INFO] - MainThread - Longport 交易环境连接成功
+2026-02-09 22:53:32,803 - [INFO] - MainThread - 交易状态已保存。
+2026-02-09 22:53:32,803 - [INFO] - MainThread - 交易状态已重置。
+2026-02-09 22:53:32,804 - [INFO] - Thread-DXYZ - 启动策略监控: DXYZ
+2026-02-09 22:53:33,857 - [INFO] - Thread-DXYZ - DXYZ 触发买入信号: 日涨幅 1.17%
+2026-02-09 22:53:33,857 - [INFO] - Thread-DXYZ - 正在买入 DXYZ | 数量: 62 | 预估价格: 32.07
+2026-02-09 22:53:33,858 - [ERROR] - Thread-DXYZ - 买入失败 DXYZ: argument 'order_type': 'str' object cannot be cast as 'OrderType'
+2026-02-09 22:53:39,229 - [INFO] - Thread-DXYZ - DXYZ 触发买入信号: 日涨幅 1.17%
+2026-02-09 22:53:39,230 - [INFO] - Thread-DXYZ - 正在买入 DXYZ | 数量: 62 | 预估价格: 32.07
+2026-02-09 22:53:39,230 - [ERROR] - Thread-DXYZ - 买入失败 DXYZ: argument 'order_type': 'str' object cannot be cast as 'OrderType'
+2026-02-09 22:53:40,673 - [INFO] - MainThread - 交易状态已保存。
