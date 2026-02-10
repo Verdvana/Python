@@ -11,8 +11,8 @@ from decimal import Decimal
 
 # 第三方库
 import finnhub
-# 修复核心：导入 OrderType 枚举 
-from longport.openapi import TradeContext, Config, OrderType 
+# 修复核心：导入 OrderType, OrderSide, TimeInForce 枚举 
+from longport.openapi import TradeContext, Config, OrderType, OrderSide, TimeInForce 
 
 # ==========================================
 # 1. 用户配置区域 (可在此修改策略参数)
@@ -141,15 +141,14 @@ class Trader:
         logger.info(f"正在买入 {symbol} | 数量: {quantity} | 预估价格: {current_price}")
         
         try:
-            # 修复：order_type 使用 OrderType.LO 枚举 
-            # 增加 round 处理确保 Decimal 转换精准 
+            # 修复：side 和 time_in_force 使用对应的枚举类型 [cite: 1, 3]
             self.ctx.submit_order(
                 symbol=symbol,
                 order_type=OrderType.LO, 
-                side="Buy",
+                side=OrderSide.Buy,
                 submitted_quantity=quantity,
                 submitted_price=Decimal(str(round(current_price * 1.01, 2))), 
-                time_in_force="Day"
+                time_in_force=TimeInForce.Day
             )
             state_manager.update_position(symbol, quantity, current_price, current_price)
             logger.info(f"买入指令已发送: {symbol}")
@@ -162,14 +161,14 @@ class Trader:
         """执行限价卖出"""
         logger.info(f"正在卖出 {symbol} | 原因: {reason} | 价格: {current_price}")
         try:
-            # 修复：order_type 使用 OrderType.LO 枚举 
+            # 修复：side 和 time_in_force 使用对应的枚举类型 [cite: 1, 3]
             self.ctx.submit_order(
                 symbol=symbol,
                 order_type=OrderType.LO,
-                side="Sell",
+                side=OrderSide.Sell,
                 submitted_quantity=quantity,
                 submitted_price=Decimal(str(round(current_price * 0.99, 2))),
-                time_in_force="Day"
+                time_in_force=TimeInForce.Day
             )
             state_manager.update_position(symbol, 0, 0, 0)
             logger.info(f"卖出指令已发送: {symbol}")
