@@ -12,7 +12,7 @@ from decimal import Decimal
 # 第三方库
 import finnhub
 import pytz  # [新增] 用于处理美股时区(冬令时/夏令时)
-from longport.openapi import TradeContext, Config
+from longport.openapi import TradeContext, Config, OrderType, OrderSide, TimeInForceType
 
 # ==========================================
 # 1. 用户配置区域 (可在此修改策略参数)
@@ -191,11 +191,11 @@ class Trader:
         try:
             self.ctx.submit_order(
                 symbol=symbol,
-                order_type="LO", # Limit Order
-                side="Buy",
+                order_type=OrderType.LO, # Limit Order
+                side=OrderSide.Buy,
                 submitted_quantity=quantity,
                 submitted_price=Decimal(f"{limit_price:.2f}"), # 使用计算后的限价
-                time_in_force="Day"
+                time_in_force=TimeInForceType.Day
             )
             # 更新状态
             state_manager.update_position(symbol, quantity, current_price, current_price)
@@ -214,11 +214,11 @@ class Trader:
         try:
             self.ctx.submit_order(
                 symbol=symbol,
-                order_type="LO",
-                side="Sell",
+                order_type=OrderType.LO,
+                side=OrderSide.Sell,
                 submitted_quantity=quantity,
                 submitted_price=Decimal(f"{limit_price:.2f}"),
-                time_in_force="Day"
+                time_in_force=TimeInForceType.Day
             )
             state_manager.update_position(symbol, 0, 0, 0) # 清空持仓
             
