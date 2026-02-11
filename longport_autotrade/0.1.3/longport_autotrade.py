@@ -12,7 +12,7 @@ from decimal import Decimal
 # 第三方库
 import finnhub
 # 修复核心：导入 OrderType, OrderSide, TimeInForce 枚举 
-from longport.openapi import TradeContext, Config, OrderType, OrderSide, TimeInForce 
+from longport.openapi import TradeContext, Config, OrderType, OrderSide, TimeInForceType 
 
 # ==========================================
 # 1. 用户配置区域 (可在此修改策略参数)
