@@ -242,13 +242,17 @@ def is_market_open():
     """
     检查当前是否为美股交易时间 (09:30 - 16:00 ET)。
     使用 pytz 自动处理冬令时(EST)和夏令时(EDT)的转换。
+    修复：强制使用 UTC 时间作为基准进行转换，避免服务器本地时区设置造成的时间偏移。
     """
     try:
         # 1. 设置美东时区对象
         tz_ny = pytz.timezone('America/New_York')
         
-        # 2. 获取当前的纽约时间 (自动处理 DST)
-        now_ny = datetime.now(tz_ny)
+        # 2. [修复] 获取当前的纽约时间 (更稳健的方式)
+        # 并不是直接调用 datetime.now(tz_ny)，而是先获取 UTC 时间再转时区
+        # 这能防止服务器系统时区(System Local Time)设置不当时导致的计算错误
+        now_utc = datetime.now(pytz.utc)
+        now_ny = now_utc.astimezone(tz_ny)
         
         # 3. 检查是否是周末 (0=周一 ... 4=周五, 5=周六, 6=周日)
         if now_ny.weekday() >= 5:
@@ -259,10 +263,17 @@ def is_market_open():
         market_start = dtime(9, 30)
         market_end = dtime(16, 0)
         
-        return market_start <= current_time <= market_end
+        # 调试日志：如果发现关盘，打印一下当前脚本计算出的纽约时间，方便排查
+        is_open = market_start <= current_time <= market_end
+        if not is_open and now_ny.minute % 30 == 0 and now_ny.second < 5: 
+            # 限制日志频率，避免刷屏，仅在整点或半点打印
+            logger.info(f"市场检查: 当前纽约时间 {now_ny.strftime('%Y-%m-%d %H:%M:%S')} (非交易时段)")
+
+        return is_open
     except Exception as e:
         logger.error(f"时区时间检查错误: {e}")
         return False # 出错则默认不交易以保安全
+
 
 def dxyz_strategy_logic(symbol, config, running_event):
     """DXYZ 专用策略: 结合趋势跟踪与动态阶梯移动止损"""
