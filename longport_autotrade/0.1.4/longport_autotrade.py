@@ -279,6 +279,9 @@ def dxyz_strategy_logic(symbol, config, running_event):
     """DXYZ 专用策略: 结合趋势跟踪与动态阶梯移动止损"""
     logger.info(f"启动策略监控: {symbol}")
     
+    # [新增] 心跳计数器，用于在交易时段打印存活日志
+    heartbeat_counter = 0
+
     while running_event.is_set():
         # [新增] 1.B 盘中时间检查
         if not is_market_open():
@@ -312,9 +315,20 @@ def dxyz_strategy_logic(symbol, config, running_event):
             if current_price is None or current_price == 0:
                 time.sleep(POLLING_INTERVAL)
                 continue
+            
+            # 计算日内涨幅
+            day_change_pct = (current_price - open_price) / open_price if open_price else 0
 
             # 2. 读取当前持仓状态
             position = state_manager.get_position(symbol)
+
+            # =========================================================
+            # [修复] 增加心跳日志 (每约 60 秒打印一次)，证明脚本未卡死
+            # =========================================================
+            heartbeat_counter += 1
+            if heartbeat_counter % 12 == 0: # 5秒一次循环，12次约60秒
+                pos_str = "持仓中" if position else "空仓监控"
+                logger.info(f"[{symbol}] 运行中 | {pos_str} | 现价: {current_price} | 涨幅: {day_change_pct:.2%}")
 
             # --- 场景 A: 持有仓位 (监控卖出) ---
             if position:
@@ -361,12 +375,14 @@ def dxyz_strategy_logic(symbol, config, running_event):
             else:
                 # [新增] 1.A 冷却期检查
                 if state_manager.is_in_cooldown(symbol):
-                    logger.info(f"{symbol} 处于冷却期，跳过买入检查")
+                    # 降低冷却期日志频率，避免刷屏
+                    if heartbeat_counter % 12 == 0:
+                        logger.info(f"{symbol} 处于冷却期，跳过买入检查")
                     time.sleep(POLLING_INTERVAL)
                     continue
 
                 # 策略: 日内动量策略
-                day_change_pct = (current_price - open_price) / open_price
+                # day_change_pct 已经在上面计算过了
                 
                 # [修改] 3.a 动量买入条件增强 (价格涨幅 + 成交量过滤)
                 volume_ok = current_volume > MIN_VOLUME_THRESHOLD
@@ -378,7 +394,7 @@ def dxyz_strategy_logic(symbol, config, running_event):
                 elif price_trend_ok and not volume_ok:
                      logger.info(f"{symbol} 价格达标但成交量不足 ({current_volume})，不操作")
                 else:
-                    pass # 观察中
+                    pass # 观察中，不满足条件时不打印日志，避免日志爆炸
 
         except Exception as e:
             logger.error(f"策略循环错误 ({symbol}): {e}")
@@ -392,7 +408,7 @@ def dxyz_strategy_logic(symbol, config, running_event):
 def main():
     # 打印欢迎信息
     print("========================================")
-    print("   Longport AutoTrade v0.1.4 (Timezone Fixed)")
+    print("   Longport AutoTrade v0.1.5 (Heartbeat Added)")
     print("========================================")
 
     # 交互式启动选择
