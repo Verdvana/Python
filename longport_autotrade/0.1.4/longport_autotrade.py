@@ -385,14 +385,15 @@ def dxyz_strategy_logic(symbol, config, running_event):
                 # day_change_pct 已经在上面计算过了
                 
                 # [修改] 3.a 动量买入条件增强 (价格涨幅 + 成交量过滤)
-                volume_ok = current_volume > MIN_VOLUME_THRESHOLD
+                # 修复：兼容 Finnhub 接口未返回成交量(即为 0.0)的情况，防止因获取不到数据而错过行情
+                volume_ok = (current_volume > MIN_VOLUME_THRESHOLD) or (current_volume == 0.0)
                 price_trend_ok = day_change_pct > BUY_MOMENTUM_THRESHOLD
 
                 if price_trend_ok and volume_ok:
                     logger.info(f"{symbol} 触发买入信号: 日涨幅 {day_change_pct:.2%} | 成交量 {current_volume}")
                     trader.execute_buy(symbol, config['budget'], current_price)
                 elif price_trend_ok and not volume_ok:
-                     logger.info(f"{symbol} 价格达标但成交量不足 ({current_volume})，不操作")
+                    logger.info(f"{symbol} 价格达标但成交量不足 ({current_volume})，不操作")
                 else:
                     pass # 观察中，不满足条件时不打印日志，避免日志爆炸
 
