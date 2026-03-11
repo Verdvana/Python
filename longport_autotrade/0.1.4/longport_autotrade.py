@@ -174,7 +174,6 @@ class Trader:
 
     def execute_buy(self, symbol, budget, current_price):
         """执行买入 (优化了价格计算和资金检查)"""
-        # [修改] 2.c 资金管理：检查是否足够买1股
         if current_price <= 0:
             return False
             
@@ -183,20 +182,21 @@ class Trader:
             logger.warning(f"{symbol} 资金不足以购买 1 股 (Price: {current_price}, Budget: {budget})，跳过")
             return False
 
-        # [修改] 2.a/b 动态滑点计算 (向上偏移以保证买入)
         limit_price = current_price * (1 + SLIPPAGE_PCT)
         
         logger.info(f"正在买入 {symbol} | 数量: {quantity} | 触发价: {current_price} | 限价: {limit_price:.2f}")
         
         try:
+            # 【核心修复】：严格按照长桥 API 规范，去除前 5 个参数的关键字，并强制将 quantity 转为 Decimal
             self.ctx.submit_order(
-                symbol=symbol,
-                order_type=OrderType.LO, # Limit Order
-                side=OrderSide.Buy,
-                submitted_quantity=quantity,
-                submitted_price=Decimal(f"{limit_price:.2f}"), # 使用计算后的限价
-                time_in_force=TimeInForceType.Day
+                symbol,                         # 1. 股票代码
+                OrderType.LO,                   # 2. 订单类型: 限价单
+                OrderSide.Buy,                  # 3. 买卖方向: 买入
+                Decimal(str(quantity)),         # 4. 提交数量: 必须是 Decimal 对象
+                TimeInForceType.Day,            # 5. 订单有效期: 当日有效
+                submitted_price=Decimal(f"{limit_price:.2f}") # 6. 限价价格 (这个可以是关键字参数)
             )
+            
             # 更新状态
             state_manager.update_position(symbol, quantity, current_price, current_price)
             logger.info(f"买入指令已发送: {symbol}")
@@ -207,22 +207,22 @@ class Trader:
 
     def execute_sell(self, symbol, quantity, current_price, reason="Unknown"):
         """执行卖出"""
-        # [修改] 2.a/b 动态滑点计算 (卖出向下偏移以保证成交)
         limit_price = current_price * (1 - SLIPPAGE_PCT)
         
         logger.info(f"正在卖出 {symbol} | 原因: {reason} | 触发价: {current_price} | 限价: {limit_price:.2f}")
         try:
+            # 【核心修复】：同样严格遵守传参规范
             self.ctx.submit_order(
-                symbol=symbol,
-                order_type=OrderType.LO,
-                side=OrderSide.Sell,
-                submitted_quantity=quantity,
-                submitted_price=Decimal(f"{limit_price:.2f}"),
-                time_in_force=TimeInForceType.Day
+                symbol,
+                OrderType.LO,
+                OrderSide.Sell,
+                Decimal(str(quantity)),
+                TimeInForceType.Day,
+                submitted_price=Decimal(f"{limit_price:.2f}")
             )
             state_manager.update_position(symbol, 0, 0, 0) # 清空持仓
             
-            # [新增] 1.A 卖出成功后，触发冷却期，防止立即买回
+            # 卖出成功后，触发冷却期，防止立即买回
             state_manager.set_cooldown(symbol)
             
             logger.info(f"卖出指令已发送: {symbol}")
@@ -232,7 +232,6 @@ class Trader:
             return False
 
 trader = Trader()
-
 # ==========================================
 # 5. 策略引擎 (DXYZ 核心逻辑)
 # ==========================================
