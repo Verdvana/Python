@@ -84,9 +84,7 @@ lp_config = Config(
 class StateManager:
     def __init__(self):
         self.state = {}
-        # 【关键修复】：将普通的 Lock 改为 RLock (可重入锁)
-        # 避免 update_position 调用 save_state 时发生同线程死锁
-        self.lock = threading.RLock()
+        self.lock = threading.Lock()
 
     def load_state(self):
         if os.path.exists(STATE_FILE):
@@ -176,7 +174,6 @@ class Trader:
 
     def execute_buy(self, symbol, budget, current_price):
         """执行买入 (优化了价格计算和资金检查)"""
-        # [修改] 2.c 资金管理：检查是否足够买1股
         if current_price <= 0:
             return False
             
@@ -185,20 +182,21 @@ class Trader:
             logger.warning(f"{symbol} 资金不足以购买 1 股 (Price: {current_price}, Budget: {budget})，跳过")
             return False
 
-        # [修改] 2.a/b 动态滑点计算 (向上偏移以保证买入)
         limit_price = current_price * (1 + SLIPPAGE_PCT)
         
         logger.info(f"正在买入 {symbol} | 数量: {quantity} | 触发价: {current_price} | 限价: {limit_price:.2f}")
         
         try:
+            # 【核心修复】：严格按照长桥 API 规范，去除前 5 个参数的关键字，并强制将 quantity 转为 Decimal
             self.ctx.submit_order(
                 symbol,                         # 1. 股票代码
                 OrderType.LO,                   # 2. 订单类型: 限价单
                 OrderSide.Buy,                  # 3. 买卖方向: 买入
                 Decimal(str(quantity)),         # 4. 提交数量: 必须是 Decimal 对象
                 TimeInForceType.Day,            # 5. 订单有效期: 当日有效
-                submitted_price=Decimal(f"{limit_price:.2f}") # 6. 限价价格
+                submitted_price=Decimal(f"{limit_price:.2f}") # 6. 限价价格 (这个可以是关键字参数)
             )
+            
             # 更新状态
             state_manager.update_position(symbol, quantity, current_price, current_price)
             logger.info(f"买入指令已发送: {symbol}")
@@ -209,11 +207,11 @@ class Trader:
 
     def execute_sell(self, symbol, quantity, current_price, reason="Unknown"):
         """执行卖出"""
-        # [修改] 2.a/b 动态滑点计算 (卖出向下偏移以保证成交)
         limit_price = current_price * (1 - SLIPPAGE_PCT)
         
         logger.info(f"正在卖出 {symbol} | 原因: {reason} | 触发价: {current_price} | 限价: {limit_price:.2f}")
         try:
+            # 【核心修复】：同样严格遵守传参规范
             self.ctx.submit_order(
                 symbol,
                 OrderType.LO,
@@ -224,7 +222,7 @@ class Trader:
             )
             state_manager.update_position(symbol, 0, 0, 0) # 清空持仓
             
-            # [新增] 1.A 卖出成功后，触发冷却期，防止立即买回
+            # 卖出成功后，触发冷却期，防止立即买回
             state_manager.set_cooldown(symbol)
             
             logger.info(f"卖出指令已发送: {symbol}")
@@ -234,7 +232,6 @@ class Trader:
             return False
 
 trader = Trader()
-
 # ==========================================
 # 5. 策略引擎 (DXYZ 核心逻辑)
 # ==========================================
@@ -329,6 +326,8 @@ def dxyz_strategy_logic(symbol, config, running_event):
                 time.sleep(POLLING_INTERVAL)
                 continue
             
+            # 计算日内涨幅
+            #day_change_pct = (current_price - open_price) / open_price if open_price else 0
             # 计算相较于昨收的标准涨幅
             day_change_pct = (current_price - prev_close) / prev_close if prev_close else 0
 
@@ -353,6 +352,7 @@ def dxyz_strategy_logic(symbol, config, running_event):
                 if current_price > highest_price:
                     highest_price = current_price
                     state_manager.update_position(symbol, quantity, entry_price, highest_price)
+                    # logger.info(f"{symbol} 创新高: {highest_price}") 
 
                 # 计算当前盈亏比
                 pnl_pct = (current_price - entry_price) / entry_price
@@ -394,6 +394,10 @@ def dxyz_strategy_logic(symbol, config, running_event):
                     continue
 
                 # 策略: 日内动量策略
+                # day_change_pct 已经在上面计算过了
+                
+                # [修改] 3.a 动量买入条件增强 (价格涨幅 + 成交量过滤)
+                # 修复：兼容 Finnhub 接口未返回成交量(即为 0.0)的情况，防止因获取不到数据而错过行情
                 volume_ok = (current_volume > MIN_VOLUME_THRESHOLD) or (current_volume == 0.0)
                 price_trend_ok = day_change_pct > BUY_MOMENTUM_THRESHOLD
 
@@ -403,7 +407,7 @@ def dxyz_strategy_logic(symbol, config, running_event):
                 elif price_trend_ok and not volume_ok:
                     logger.info(f"{symbol} 价格达标但成交量不足 ({current_volume})，不操作")
                 else:
-                    pass # 观察中，不满足条件时不打印日志
+                    pass # 观察中，不满足条件时不打印日志，避免日志爆炸
 
         except Exception as e:
             logger.error(f"策略循环错误 ({symbol}): {e}")
@@ -417,7 +421,7 @@ def dxyz_strategy_logic(symbol, config, running_event):
 def main():
     # 打印欢迎信息
     print("========================================")
-    print("   Longport AutoTrade v0.1.4 (Deadlock Fixed)")
+    print("   Longport AutoTrade v0.1.4 (Bug Fixed)")
     print("========================================")
 
     # 交互式启动选择
