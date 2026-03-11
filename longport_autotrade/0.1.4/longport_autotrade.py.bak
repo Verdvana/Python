@@ -21,8 +21,8 @@ from longport.openapi import TradeContext, Config, OrderType, OrderSide, TimeInF
 # 交易目标配置
 # 格式: {"TICKER": {"budget": 投资金额(USD), "strategy_type": "dxyz_momentum"}}
 TARGET_STOCKS = {
-    "DXYZ.US": {                 # [修改] 适配长桥 OpenAPI 规范，必须加上市场后缀 .US
-        "budget": 1000,          # 投资该股票的总金额
+    "DXYZ.US": {
+        "budget": 1000,
         "strategy_type": "dxyz_dynamic" 
     }
 }
@@ -285,10 +285,7 @@ def dxyz_strategy_logic(symbol, config, running_event):
     while running_event.is_set():
         # [新增] 1.B 盘中时间检查
         if not is_market_open():
-            # [修改] 降低非交易时间的日志频率，防假死同时防刷屏
-            if heartbeat_counter % 5 == 0: 
-                logger.info(f"[{symbol}] 当前非美股交易时间 (09:30-16:00 ET) 或周末，休眠等待...")
-            heartbeat_counter += 1
+            logger.info("当前非美股交易时间 (09:30-16:00 ET) 或周末，休眠等待...")
             time.sleep(60) # 非交易时间休眠久一点
             continue
 
@@ -296,13 +293,9 @@ def dxyz_strategy_logic(symbol, config, running_event):
             # [新增] 4.b 异常重试机制 (API 鲁棒性)
             quote = None
             retry_count = 0
-            
-            # [关键修复 1] 剔除后缀，适配 Finnhub API (Finnhub 不认识带 .US 的代码)
-            finnhub_symbol = symbol.split('.')[0] 
-            
             while retry_count < 3:
                 try:
-                    quote = finnhub_client.quote(finnhub_symbol) # 使用剔除后缀后的代码
+                    quote = finnhub_client.quote(symbol)
                     break # 成功获取则跳出循环
                 except Exception as api_err:
                     retry_count += 1
@@ -314,16 +307,13 @@ def dxyz_strategy_logic(symbol, config, running_event):
                 time.sleep(POLLING_INTERVAL)
                 continue
 
-            # [修改] 使用 .get() 安全获取，防止报 KeyError
-            current_price = float(quote.get('c', 0))  # 当前价格
-            open_price = float(quote.get('o', 0))     # 今日开盘价
-            prev_close = float(quote.get('pc', 0))    # 昨收价 (Previous Close)
+            current_price = float(quote['c'])  # 当前价格
+            open_price = float(quote['o'])     # 今日开盘价
+            prev_close = float(quote['pc'])    # 昨收价 (Previous Close)
             # [新增] 3.a 读取成交量
             current_volume = float(quote.get('v', 0)) # v 是当日常量
 
-            # [关键修复 2] 如果价格为0，大声报错而不是静默跳过，防止假死
             if current_price is None or current_price == 0:
-                logger.warning(f"[{symbol}] Finnhub 返回的价格为 0，请检查接口或代码！原始返回: {quote}")
                 time.sleep(POLLING_INTERVAL)
                 continue
             
@@ -422,7 +412,7 @@ def dxyz_strategy_logic(symbol, config, running_event):
 def main():
     # 打印欢迎信息
     print("========================================")
-    print("   Longport AutoTrade v0.1.4 (Bug Fixed)")
+    print("   Longport AutoTrade v0.1.5 (Heartbeat Added)")
     print("========================================")
 
     # 交互式启动选择
