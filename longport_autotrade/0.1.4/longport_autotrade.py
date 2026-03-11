@@ -21,8 +21,8 @@ from longport.openapi import TradeContext, Config, OrderType, OrderSide, TimeInF
 # 交易目标配置
 # 格式: {"TICKER": {"budget": 投资金额(USD), "strategy_type": "dxyz_momentum"}}
 TARGET_STOCKS = {
-    "DXYZ": {
-        "budget": 1000,          # 投资该股票的总金额
+    "DXYZ.US": {
+        "budget": 1000,
         "strategy_type": "dxyz_dynamic" 
     }
 }
