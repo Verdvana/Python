@@ -1,5 +1,6 @@
-2026-03-11 22:09:47,822 - [INFO] - MainThread - Longport 交易环境连接成功
-2026-03-11 22:09:47,825 - [INFO] - MainThread - 交易状态已保存。
-2026-03-11 22:09:47,826 - [INFO] - MainThread - 交易状态已重置。
-2026-03-11 22:09:47,827 - [INFO] - Thread-DXYZ.US - 启动策略监控: DXYZ.US
-2026-03-11 22:11:20,264 - [INFO] - MainThread - 交易状态已保存。
+2026-03-11 22:34:33,664 - [INFO] - MainThread - Longport 交易环境连接成功
+2026-03-11 22:34:35,590 - [INFO] - MainThread - 交易状态已保存。
+2026-03-11 22:34:35,591 - [INFO] - MainThread - 交易状态已重置。
+2026-03-11 22:34:35,591 - [INFO] - Thread-DXYZ.US - 启动策略监控: DXYZ.US
+2026-03-11 22:34:36,632 - [INFO] - Thread-DXYZ.US - DXYZ.US 触发买入信号: 日涨幅 1.77% | 成交量 0.0
+2026-03-11 22:34:36,633 - [INFO] - Thread-DXYZ.US - 正在买入 DXYZ.US | 数量: 37 | 触发价: 26.48 | 限价: 26.74
