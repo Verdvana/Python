@@ -309,6 +309,7 @@ def dxyz_strategy_logic(symbol, config, running_event):
 
             current_price = float(quote['c'])  # 当前价格
             open_price = float(quote['o'])     # 今日开盘价
+            prev_close = float(quote['pc'])    # 昨收价 (Previous Close)
             # [新增] 3.a 读取成交量
             current_volume = float(quote.get('v', 0)) # v 是当日常量
 
@@ -317,7 +318,9 @@ def dxyz_strategy_logic(symbol, config, running_event):
                 continue
             
             # 计算日内涨幅
-            day_change_pct = (current_price - open_price) / open_price if open_price else 0
+            #day_change_pct = (current_price - open_price) / open_price if open_price else 0
+            # 计算相较于昨收的标准涨幅
+            day_change_pct = (current_price - prev_close) / prev_close if prev_close else 0
 
             # 2. 读取当前持仓状态
             position = state_manager.get_position(symbol)
