@@ -1,8 +1,9 @@
 {
     "DXYZ.US": {
-        "quantity": 37,
-        "entry_price": 26.42,
-        "highest_price": 26.42,
-        "last_update": "2026-03-11 22:53:32.223656"
+        "quantity": 0,
+        "entry_price": 0,
+        "highest_price": 0,
+        "last_update": "2026-03-11 23:08:18.870333",
+        "cooldown_until": 1773330153.354033
     }
 }
